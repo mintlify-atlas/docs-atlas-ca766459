@@ -1,0 +1,337 @@
+---
+title: "Donations API — manage donation records and lifecycle"
+sidebarTitle: "Donaciones"
+description: "Create and manage food donation records with line items, track lifecycle states from PENDIENTE through CONFIRMADA, and confirm donations before generating invoices."
+---
+
+The Donaciones API is the core of the Banco Alimentos workflow. A _donación_ represents a single donation event: a dated record linking a donor company to one or more item lines (_items_), carrying a supplier remittance number (_nroRemitoProveedor_), optional notes, and a lifecycle state. Donations begin in `PENDIENTE` state and must be explicitly confirmed via the `/confirmar` endpoint before downstream processes such as invoice generation can proceed. All endpoints require a valid JWT and enforce specific Spring Security authorities.
+
+**Base URL:** `/api/donaciones`
+
+---
+
+## Endpoints
+
+### GET /api/donaciones
+
+Returns the full list of donation records.
+
+**Required authority:** `DONACION_VER`
+
+#### Response
+
+Returns an array of [DonacionResponseDTO](#donacion-response-schema) objects.
+
+```bash
+curl -s https://api.example.com/api/donaciones \
+  -H 'Authorization: Bearer <token>'
+```
+
+```json
+[
+  {
+    "id": 1,
+    "fecha": "2024-06-01",
+    "estado": "PENDIENTE",
+    "nroRemitoProveedor": 50012,
+    "observaciones": "Entregar en depósito central",
+    "items": []
+  }
+]
+```
+
+---
+
+### GET /api/donaciones/\{id\}
+
+Returns a single donation by its numeric ID.
+
+**Required authority:** `DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation.
+</ParamField>
+
+#### Response
+
+Returns a single [DonacionResponseDTO](#donacion-response-schema). Throws a runtime exception (`404`) if the donation does not exist.
+
+```bash
+curl -s https://api.example.com/api/donaciones/1 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### POST /api/donaciones
+
+Creates a new donation record, including its initial set of line items.
+
+**Required authority:** `DONACION_CREAR`
+
+#### Request body
+
+<ParamField body="fecha" type="string (LocalDate)" required>
+  Donation date in `YYYY-MM-DD` format. Cannot be null.
+</ParamField>
+
+<ParamField body="estado" type="EstadoDonacion" required>
+  Initial lifecycle state. Must be one of `PENDIENTE`, `CONFIRMADA`, or `CANCELADA`. Typically set to `PENDIENTE` on creation.
+</ParamField>
+
+<ParamField body="nroRemitoProveedor" type="integer" required>
+  Supplier remittance / delivery note number. Cannot be null.
+</ParamField>
+
+<ParamField body="observaciones" type="string">
+  Optional free-text notes about the donation.
+</ParamField>
+
+<ParamField body="items" type="array of ItemDonacionRequestDTO" required>
+  List of line items included in this donation. Must contain at least one item. Each item object requires:
+  - `fechaVencimiento` (date, future) — product expiry date
+  - `valorUnitario` (number, positive) — unit value
+  - `cantidad` (integer, ≥ 1) — quantity
+  - `productoId` (Long) — ID of the associated product
+</ParamField>
+
+<ParamField body="idDonante" type="Long">
+  ID of the donor company associated with this donation.
+</ParamField>
+
+#### Response
+
+Returns the created [DonacionResponseDTO](#donacion-response-schema) with HTTP `201 Created`.
+
+```bash
+curl -s -X POST https://api.example.com/api/donaciones \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fecha": "2024-06-15",
+    "estado": "PENDIENTE",
+    "nroRemitoProveedor": 50099,
+    "observaciones": "Donación de invierno",
+    "idDonante": 7,
+    "items": [
+      {
+        "fechaVencimiento": "2025-12-31",
+        "valorUnitario": 150.00,
+        "cantidad": 50,
+        "productoId": 3
+      }
+    ]
+  }'
+```
+
+```json
+{
+  "id": 12,
+  "fecha": "2024-06-15",
+  "estado": "PENDIENTE",
+  "nroRemitoProveedor": 50099,
+  "observaciones": "Donación de invierno",
+  "items": [
+    {
+      "id": 44,
+      "fechaVencimiento": "2025-12-31T00:00:00.000+00:00",
+      "valorUnitario": 150.0,
+      "cantidad": 50,
+      "productoNombre": "Arroz",
+      "donante": "Alimentos del Sur S.A."
+    }
+  ]
+}
+```
+
+---
+
+### PUT /api/donaciones/\{id\}
+
+Fully replaces an existing donation record. Provide all fields including the complete items list.
+
+**Required authority:** `DONACION_ACTUALIZAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation to update.
+</ParamField>
+
+#### Request body
+
+Same structure as [POST /api/donaciones](#post-apidonaciones). All required fields must be supplied.
+
+#### Response
+
+Returns the updated [DonacionResponseDTO](#donacion-response-schema) with HTTP `200 OK`.
+
+```bash
+curl -s -X PUT https://api.example.com/api/donaciones/12 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fecha": "2024-06-15",
+    "estado": "PENDIENTE",
+    "nroRemitoProveedor": 50099,
+    "observaciones": "Actualización de observaciones",
+    "idDonante": 7,
+    "items": [
+      {
+        "fechaVencimiento": "2025-12-31",
+        "valorUnitario": 175.00,
+        "cantidad": 60,
+        "productoId": 3
+      }
+    ]
+  }'
+```
+
+---
+
+### DELETE /api/donaciones/\{id\}
+
+Permanently deletes a donation record and its associated items.
+
+**Required authority:** `DONACION_ELIMINAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation to delete.
+</ParamField>
+
+#### Response
+
+Returns HTTP `200 OK` with the plain-text body `"Donación eliminada correctamente"`.
+
+```bash
+curl -s -X DELETE https://api.example.com/api/donaciones/12 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### PUT /api/donaciones/\{id\}/confirmar
+
+Transitions a donation's `estado` from `PENDIENTE` to `CONFIRMADA`. This action is required before the donation can be used for invoice generation or stock update processes.
+
+**Required authority:** `DONACION_ACTUALIZAR`
+
+<Note>
+  A donation **must** be confirmed via this endpoint before it is eligible for invoice generation or any downstream inventory workflow. Attempting to generate an invoice for a `PENDIENTE` or `CANCELADA` donation will fail.
+</Note>
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation to confirm.
+</ParamField>
+
+#### Response
+
+Returns the updated [DonacionResponseDTO](#donacion-response-schema) with `estado` set to `CONFIRMADA`.
+
+```bash
+curl -s -X PUT https://api.example.com/api/donaciones/12/confirmar \
+  -H 'Authorization: Bearer <token>'
+```
+
+```json
+{
+  "id": 12,
+  "fecha": "2024-06-15",
+  "estado": "CONFIRMADA",
+  "nroRemitoProveedor": 50099,
+  "observaciones": "Donación de invierno",
+  "items": [
+    {
+      "id": 44,
+      "fechaVencimiento": "2025-12-31T00:00:00.000+00:00",
+      "valorUnitario": 150.0,
+      "cantidad": 50,
+      "productoNombre": "Arroz",
+      "donante": "Alimentos del Sur S.A."
+    }
+  ]
+}
+```
+
+---
+
+## Schemas
+
+### EstadoDonacion
+
+The `estado` field uses the following enumerated values:
+
+| Value | Description |
+|---|---|
+| `PENDIENTE` | Default state when a donation is first created. Awaiting confirmation. |
+| `CONFIRMADA` | Donation has been confirmed and is eligible for invoice generation. |
+| `CANCELADA` | Donation has been cancelled and is no longer active. |
+
+### Donacion request schema
+
+<ResponseField name="fecha" type="string (LocalDate)">
+  Donation date in `YYYY-MM-DD` format. Required.
+</ResponseField>
+
+<ResponseField name="estado" type="EstadoDonacion">
+  Lifecycle state. One of `PENDIENTE`, `CONFIRMADA`, `CANCELADA`. Required.
+</ResponseField>
+
+<ResponseField name="nroRemitoProveedor" type="integer">
+  Supplier remittance number. Required.
+</ResponseField>
+
+<ResponseField name="observaciones" type="string">
+  Optional free-text notes.
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  List of `ItemDonacionRequestDTO` objects. At least one item is required.
+</ResponseField>
+
+<ResponseField name="idDonante" type="Long">
+  ID of the associated donor company.
+</ResponseField>
+
+### Donacion response schema
+
+<ResponseField name="id" type="Long">
+  Unique numeric identifier assigned by the server.
+</ResponseField>
+
+<ResponseField name="fecha" type="string (LocalDate)">
+  Donation date in `YYYY-MM-DD` format.
+</ResponseField>
+
+<ResponseField name="estado" type="EstadoDonacion">
+  Current lifecycle state: `PENDIENTE`, `CONFIRMADA`, or `CANCELADA`.
+</ResponseField>
+
+<ResponseField name="nroRemitoProveedor" type="integer">
+  Supplier remittance number.
+</ResponseField>
+
+<ResponseField name="observaciones" type="string">
+  Optional notes attached to the donation.
+</ResponseField>
+
+<ResponseField name="items" type="array of ItemDonacionResponseDTO">
+  Line items included in this donation. See [Items Donación](/api/item-donacion) for the full item schema.
+</ResponseField>
+
+---
+
+## Error responses
+
+| HTTP Status | Condition |
+|---|---|
+| `400 Bad Request` | Validation failure — e.g. null `fecha`, blank `items` array, invalid `estado` value. |
+| `401 Unauthorized` | Missing or invalid JWT. |
+| `403 Forbidden` | Valid JWT but the user lacks the required authority. |
+| `404 Not Found` | No donation found for the supplied `id`. |

@@ -1,0 +1,172 @@
+---
+title: "Roles and permissions in Banco Alimentos"
+sidebarTitle: "Roles & Permissions"
+description: "Banco Alimentos uses 3 roles and 35 fine-grained permissions to control access across warehouse, treasury, and institution management operations."
+---
+
+Banco Alimentos enforces a two-layer access control model. At the coarse level, Spring Security's `SecurityConfig` gates entire URL prefixes by **role** — for example, `/api/donaciones/**` is only reachable by users who hold `ROLE_USER_DEPOSITO`. At the fine-grained level, individual controller methods are annotated with `@PreAuthorize("hasAuthority('PERMISSION_NAME')")`, meaning a user must also possess the specific **permission** for the operation they are attempting. Roles and their associated permissions are seeded into the database on every application startup by `DataInitializer`.
+
+## The three roles
+
+<CardGroup cols={3}>
+  <Card title="USER_DEPOSITO" icon="warehouse">
+    **Warehouse operations.** Manages the full donation lifecycle: registering donor companies, recording donations and their line items, tracking products, generating remittances and delivery notes, issuing invoices, and reviewing donation audit history.
+  </Card>
+  <Card title="USER_TESORERIA" icon="building-columns">
+    **Treasury & billing.** Focused on financial oversight: can view institutions and is the only role that can modify payment statuses (`ESTADO_PAGO_MODIFICAR`).
+  </Card>
+  <Card title="USER_INSTITUCIONAL" icon="hand-holding-heart">
+    **Institution management.** Creates, views, updates, and removes beneficiary institutions, and can review institution audit history.
+  </Card>
+</CardGroup>
+
+### Role-to-responsibility mapping
+
+| Role | Spring Security name | Typical responsibilities |
+|---|---|---|
+| `USER_DEPOSITO` | `ROLE_USER_DEPOSITO` | Donor & donation management, products, inventory, remittances, invoices |
+| `USER_TESORERIA` | `ROLE_USER_TESORERIA` | Payment status updates, institution overview |
+| `USER_INSTITUCIONAL` | `ROLE_USER_INSTITUCIONAL` | Beneficiary institution CRUD, institution audit log |
+
+## Authorities: roles and permissions combined
+
+When a user authenticates, `CredentialsEntity.getAuthorities()` builds the full authority set that Spring Security uses for every access decision. For each role the user holds, **two kinds of authorities** are added:
+
+- A **role authority** prefixed with `ROLE_` — e.g. `ROLE_USER_DEPOSITO`. Used by `hasRole(...)` checks in `SecurityConfig`.
+- One **permission authority** for every `PermitEntity` associated with that role — e.g. `DONACION_CREAR`. Used by `@PreAuthorize("hasAuthority('...')")` on individual endpoints.
+
+```java
+// CredentialsEntity.getAuthorities() — actual source
+roles.forEach(rol -> {
+    authorities.add(new SimpleGrantedAuthority("ROLE_" + rol.getRole().name()));
+    rol.getPermits().forEach(permit ->
+            authorities.add(new SimpleGrantedAuthority(permit.getPermit().name()))
+    );
+});
+```
+
+## All 35 permissions
+
+The table below lists every value from the `Permits` enum, grouped by the resource it governs.
+
+### Empresa (donor companies)
+
+| Permission | Granted to |
+|---|---|
+| `EMPRESA_CREAR` | USER_DEPOSITO |
+| `EMPRESA_VER` | USER_DEPOSITO |
+| `EMPRESA_ACTUALIZAR` | USER_DEPOSITO |
+| `EMPRESA_ELIMINAR` | USER_DEPOSITO |
+
+### Donación (donations)
+
+| Permission | Granted to |
+|---|---|
+| `DONACION_CREAR` | USER_DEPOSITO |
+| `DONACION_VER` | USER_DEPOSITO |
+| `DONACION_ACTUALIZAR` | USER_DEPOSITO |
+| `DONACION_ELIMINAR` | USER_DEPOSITO |
+
+### Producto (products)
+
+| Permission | Granted to |
+|---|---|
+| `PRODUCTO_CREAR` | USER_DEPOSITO |
+| `PRODUCTO_VER` | USER_DEPOSITO |
+| `PRODUCTO_ACTUALIZAR` | USER_DEPOSITO |
+| `PRODUCTO_ELIMINAR` | USER_DEPOSITO |
+
+### Item Donación (donation line items)
+
+| Permission | Granted to |
+|---|---|
+| `ITEM_DONACION_CREAR` | USER_DEPOSITO |
+| `ITEM_DONACION_VER` | USER_DEPOSITO |
+| `ITEM_DONACION_ACTUALIZAR` | USER_DEPOSITO |
+| `ITEM_DONACION_ELIMINAR` | USER_DEPOSITO |
+
+### Institución (beneficiary institutions)
+
+| Permission | Granted to |
+|---|---|
+| `INSTITUCION_CREAR` | USER_INSTITUCIONAL |
+| `INSTITUCION_VER` | USER_DEPOSITO, USER_TESORERIA, USER_INSTITUCIONAL |
+| `INSTITUCION_ACTUALIZAR` | USER_INSTITUCIONAL |
+| `INSTITUCION_ELIMINAR` | USER_INSTITUCIONAL |
+
+### Estado de pago (payment status)
+
+| Permission | Granted to |
+|---|---|
+| `ESTADO_PAGO_MODIFICAR` | USER_TESORERIA |
+
+### Remito (remittances)
+
+| Permission | Granted to |
+|---|---|
+| `REMITO_CREAR` | USER_DEPOSITO |
+| `REMITO_VER` | USER_DEPOSITO |
+| `REMITO_ACTUALIZAR` | USER_DEPOSITO |
+| `REMITO_ELIMINAR` | USER_DEPOSITO |
+
+### Detalle Remito (remittance line items)
+
+| Permission | Granted to |
+|---|---|
+| `DETALLE_REMITO_CREAR` | USER_DEPOSITO |
+| `DETALLE_REMITO_VER` | USER_DEPOSITO |
+| `DETALLE_REMITO_ACTUALIZAR` | USER_DEPOSITO |
+| `DETALLE_REMITO_ELIMINAR` | USER_DEPOSITO |
+
+### Factura (invoices)
+
+| Permission | Granted to |
+|---|---|
+| `FACTURA_CREAR` | USER_DEPOSITO |
+| `FACTURA_VER` | USER_DEPOSITO |
+| `FACTURA_ACTUALIZAR` | USER_DEPOSITO |
+| `FACTURA_ELIMINAR` | USER_DEPOSITO |
+
+### Auditoría (audit history)
+
+| Permission | Granted to |
+|---|---|
+| `AUDITORIA_DONACION_VER` | USER_DEPOSITO |
+| `AUDITORIA_INSTITUCION_VER` | USER_INSTITUCIONAL |
+
+## Seed users created by DataInitializer
+
+On every application startup, `DataInitializer` wipes and re-seeds the credentials, roles, and permissions tables. Three users are always available for development:
+
+| Username | Password | Role |
+|---|---|---|
+| `deposito` | `deposito123` | USER_DEPOSITO |
+| `tesoreria` | `tesoreria123` | USER_TESORERIA |
+| `institucional` | `institucional123` | USER_INSTITUCIONAL |
+
+<Warning>
+  Because `DataInitializer` calls `credentialsRepository.deleteAll()` on startup and `application.yaml` sets `ddl-auto: create-drop`, **all data is reset every time the application restarts**. Do not use this configuration in a production environment.
+</Warning>
+
+## Institutions endpoint and role-level access
+
+<Note>
+  The `/api/instituciones/**` path is configured in `SecurityConfig` as `authenticated()` rather than locked to a single role. This means any user with a valid JWT — regardless of their role — can reach the endpoint at the HTTP routing level. Fine-grained permission checks (`@PreAuthorize`) on individual controller methods then enforce the exact `INSTITUCION_*` permission required for each operation.
+</Note>
+
+## Permission check example
+
+When a controller method is annotated with `@PreAuthorize`, Spring evaluates the authority set that was populated by `JwtAuthenticationFilter` at request time:
+
+```java
+// Example: only a user whose role carries DONACION_CREAR can call this method
+@PreAuthorize("hasAuthority('DONACION_CREAR')")
+@PostMapping
+public ResponseEntity<DonacionResponse> create(@RequestBody DonacionRequest request) { ... }
+```
+
+If the authenticated user does not hold the required authority, Spring Security returns `403 Forbidden` before the method body executes.
+
+<Tip>
+  To extend the system with a new role, add a value to the `Roles` enum, assign the desired `PermitEntity` entries to a new `RoleEntity` in `DataInitializer`, and create a `CredentialsEntity` linked to that role. The authority derivation in `CredentialsEntity.getAuthorities()` handles everything else automatically.
+</Tip>

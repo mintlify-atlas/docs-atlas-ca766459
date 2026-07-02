@@ -1,0 +1,164 @@
+---
+title: "Donation lifecycle: from submission to invoice generation"
+sidebarTitle: "Donation Lifecycle"
+description: "How a donation moves from initial submission through item registration, confirmation, invoice generation, and final outbound distribution via remito."
+---
+
+Every donation in Banco Alimentos follows a well-defined path through the system. A `Donante` submits a `Donacion`, line items are attached as `ItemDonacion` records, the donation is confirmed, an invoice is generated, and goods are eventually dispatched to a beneficiary `Institucion` through a `Remito` with `DetalleRemito` lines. This page walks through each stage in detail.
+
+## State machine
+
+A `Donacion` is always in one of three states, stored in the `estado` field as an `EstadoDonacion` enum value.
+
+```
+          ┌─────────────┐
+  create  │             │  PUT /confirmar
+─────────►│  PENDIENTE  ├──────────────────► CONFIRMADA
+          │             │
+          └──────┬──────┘
+                 │  (soft cancel)
+                 ▼
+            CANCELADA
+```
+
+| State | Meaning | How to reach it |
+|---|---|---|
+| `PENDIENTE` | Donation recorded but not yet verified | Automatically set on `POST /api/donaciones` |
+| `CONFIRMADA` | Donation approved; invoice generation is now possible | `PUT /api/donaciones/{id}/confirmar` |
+| `CANCELADA` | Donation soft-cancelled | Set `estado` to `CANCELADA` via `PUT /api/donaciones/{id}` |
+
+<Note>
+  The `confirmarDonacion` service method sets `estado` directly to `CONFIRMADA` without pre-checking the current state. Confirm a donation only when all `ItemDonacion` line items are correct, because the attached `Factura` is generated from the current item set.
+</Note>
+
+## The happy path
+
+<Steps>
+  <Step title="Register the donor">
+    Ensure the contributing organisation exists in the system. Create one with `POST /api/donantes` if needed, supplying `razonSocial`, `cuit`, `telefono`, `email`, and `direccion`. Note the returned numeric `id` — you will need it in the next step.
+
+    ```json
+    // POST /api/donantes
+    {
+      "razonSocial": "Empresa Ejemplo S.A.",
+      "cuit": "30-12345678-9",
+      "telefono": "011-4444-5555",
+      "email": "contacto@empresa.com",
+      "direccion": "Av. Corrientes 1234, CABA"
+    }
+    ```
+  </Step>
+
+  <Step title="Submit the donation">
+    Create the `Donacion` by posting to `POST /api/donaciones`. The request must include the donor's `id`, the donation date, the supplier remito number (`nroRemitoProveedor`), and the initial list of `ItemDonacion` line items. The `estado` field should be set to `PENDIENTE`.
+
+    When this request is processed, the service also automatically creates a `Factura` of type `C` and associates it with the new donation.
+
+    ```json
+    // POST /api/donaciones
+    {
+      "idDonante": 1,
+      "fecha": "2024-07-15",
+      "estado": "PENDIENTE",
+      "nroRemitoProveedor": 10042,
+      "observaciones": "Donación campaña invierno",
+      "items": [
+        {
+          "productoId": 5,
+          "cantidad": 50,
+          "valorUnitario": 250.00,
+          "fechaVencimiento": "2025-01-31"
+        }
+      ]
+    }
+    ```
+  </Step>
+
+  <Step title="Review and adjust line items">
+    Additional `ItemDonacion` records can be added or modified before the donation is confirmed. Each item links to a specific `Producto` in the catalogue and captures:
+
+    - `cantidad` — number of units being donated
+    - `valorUnitario` — unit monetary value at the time of donation
+    - `fechaVencimiento` — product expiry date
+    - `productoId` — foreign key into the `productos` catalogue
+
+    Because `ItemDonacion` is mapped with `CascadeType.ALL` and `orphanRemoval = true`, removing an item from the list and updating the donation will delete that row from the database.
+  </Step>
+
+  <Step title="Confirm the donation">
+    Once the item list is correct, confirm the donation. This transitions `estado` from `PENDIENTE` to `CONFIRMADA`.
+
+    ```http
+    PUT /api/donaciones/{id}/confirmar
+    ```
+
+    The response returns the updated `DonacionResponseDTO` with `estado: "CONFIRMADA"`. No request body is required.
+  </Step>
+
+  <Step title="Generate a type-A invoice (optional)">
+    A type-C `Factura` was already created automatically at submission. If a type-A fiscal invoice is required, call the generate endpoint. This endpoint enforces uniqueness — it throws a `ReglaNegocioException` if a `Factura` already exists for that donation.
+
+    ```http
+    POST /api/facturas/generar/{idDonacion}
+    ```
+
+    The response is a `FacturaResponseDTO` containing `id`, `idDonacion`, `fecha` (today's date), and `tipo: "A"`.
+
+    <Warning>
+      Calling `POST /api/facturas/generar/{idDonacion}` when a Factura already exists for that donation returns an error. Each Donacion can have at most one Factura (enforced by a unique constraint on `id_donacion`).
+    </Warning>
+  </Step>
+
+  <Step title="Create a remito for outbound distribution">
+    When goods from the donation are to be distributed to a beneficiary institution, create a `Remito` referencing the target `Institucion` (identified by its UUID `externalId`).
+
+    ```json
+    // POST /api/remitos
+    {
+      "externalIdInstitucion": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "fecha": "2024-07-20"
+    }
+    ```
+
+    The Remito receives its own auto-generated UUID `externalId` upon creation.
+  </Step>
+
+  <Step title="Add DetalleRemito line items">
+    For each `ItemDonacion` being dispatched in this Remito, create a `DetalleRemito` record. Each line captures the `Remito`, the `ItemDonacion` being dispatched, and the `cantidad` (number of units being sent out in this specific shipment).
+
+    ```json
+    // POST /api/detalle-remito
+    {
+      "idRemito": 12,
+      "idItemDonacion": 7,
+      "cantidad": 20
+    }
+    ```
+
+    A single `ItemDonacion` can appear across multiple `DetalleRemito` records (across different remitos), allowing partial dispatches of a donated lot.
+  </Step>
+</Steps>
+
+## Key field notes
+
+### nroRemitoProveedor
+
+The `nroRemitoProveedor` field on `Donacion` stores the supplier's own remito reference number. It is a plain `int` used to cross-reference the donation against the donor's internal dispatch documentation. It is distinct from the system-generated `Remito` entity, which models the food bank's outbound dispatch.
+
+### ItemDonacion as the central join entity
+
+`ItemDonacion` is the pivot of the entire model. On the inbound side it belongs to a `Donacion`; on the outbound side it is referenced by `DetalleRemito`. This means a single donated product lot (one `ItemDonacion`) can be partially distributed to multiple institutions across multiple `Remito` records, each `DetalleRemito` specifying the portion dispatched.
+
+```
+Donacion
+  └── ItemDonacion (cantidad: 50 units of Producto "Arroz")
+        ├── DetalleRemito (Remito #1, Comedor Sur, cantidad: 20)
+        └── DetalleRemito (Remito #2, Escuela Norte, cantidad: 30)
+```
+
+### Factura creation behaviour
+
+Two paths create a `Factura`:
+
+1. **Automatic (type C):** `DonacionService.save()` always creates a `Factura` with `tipo = C` immediately after persisting the `Donacion`.
+2. **Explicit (type A):** `FacturaService.generarFactura()` creates a `Factura` with `tipo = A` on demand, but throws `ReglaNegocioException` if one already exists for the donation.

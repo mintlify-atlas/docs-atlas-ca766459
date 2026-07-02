@@ -1,0 +1,336 @@
+---
+title: "Products API — manage the food product catalog"
+sidebarTitle: "Productos"
+description: "Create, read, update, and delete food products in the Banco Alimentos catalog. Filter by category and control access with fine-grained permissions."
+---
+
+The Products API manages the master catalog of food items that can be donated, tracked, and distributed through the Banco Alimentos system. Each product has a name, a food category, and a unit of measure. All endpoints require a valid JWT token and the appropriate permission authority.
+
+## Base URL
+
+```
+/api/productos
+```
+
+---
+
+## Endpoints
+
+### List all products
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_VER` authority.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/productos
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/productos \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+Returns a JSON array of all products in the catalog.
+
+**Response — `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Arroz largo fino",
+    "categoria": "CEREALES_Y_DERIVADOS",
+    "unidadMedida": "KILOGRAMO"
+  }
+]
+```
+
+---
+
+### Get product by ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_VER` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the product.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/productos/{id}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/productos/1 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`**
+
+```json
+{
+  "id": 1,
+  "nombre": "Arroz largo fino",
+  "categoria": "CEREALES_Y_DERIVADOS",
+  "unidadMedida": "KILOGRAMO"
+}
+```
+
+---
+
+### Filter products by category
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_VER` authority.
+</ParamField>
+
+<ParamField query="categoria" type="Categoria" required>
+  One of the `Categoria` enum values (see table below).
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/productos/filtrar/categoria?categoria={categoria}
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/productos/filtrar/categoria?categoria=LACTEOS' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+Returns a filtered list of products matching the supplied category.
+
+**Response — `200 OK`**
+
+```json
+[
+  {
+    "id": 5,
+    "nombre": "Leche entera",
+    "categoria": "LACTEOS",
+    "unidadMedida": "LITRO"
+  }
+]
+```
+
+---
+
+### Create product
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_CREAR` authority.
+</ParamField>
+
+<CodeGroup>
+```http
+POST /api/productos
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/productos \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "nombre": "Leche entera",
+    "categoria": "LACTEOS",
+    "unidadMedida": "LITRO"
+  }'
+```
+</CodeGroup>
+
+**Request body**
+
+<ParamField body="nombre" type="string" required>
+  Product name. Must not be blank and must not exceed **55 characters**.
+</ParamField>
+
+<ParamField body="categoria" type="Categoria" required>
+  Food category. Must be a valid `Categoria` enum value (see table below).
+</ParamField>
+
+<ParamField body="unidadMedida" type="UnidadMedida" required>
+  Unit of measure. Must be a valid `UnidadMedida` enum value (see table below).
+</ParamField>
+
+**Response — `201 Created`**
+
+```json
+{
+  "id": 12,
+  "nombre": "Leche entera",
+  "categoria": "LACTEOS",
+  "unidadMedida": "LITRO"
+}
+```
+
+---
+
+### Full update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the product to update.
+</ParamField>
+
+<CodeGroup>
+```http
+PUT /api/productos/{id}
+```
+
+```bash curl
+curl -X PUT https://your-api-host/api/productos/12 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "nombre": "Leche descremada",
+    "categoria": "LACTEOS",
+    "unidadMedida": "LITRO"
+  }'
+```
+</CodeGroup>
+
+Request body uses the same `ProductoRequestDTO` fields as [Create product](#create-product).
+
+**Response — `200 OK`** — returns the updated `ProductoResponseDTO`.
+
+---
+
+### Partial update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the product.
+</ParamField>
+
+<CodeGroup>
+```http
+PATCH /api/productos/{id}
+```
+
+```bash curl
+curl -X PATCH https://your-api-host/api/productos/12 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "nombre": "Leche parcialmente descremada",
+    "categoria": "LACTEOS",
+    "unidadMedida": "LITRO"
+  }'
+```
+</CodeGroup>
+
+Request body accepts the same `ProductoRequestDTO` fields as the full update.
+
+**Response — `200 OK`** — returns the updated `ProductoResponseDTO`.
+
+---
+
+### Delete product
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `PRODUCTO_ELIMINAR` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the product to delete.
+</ParamField>
+
+<CodeGroup>
+```http
+DELETE /api/productos/{id}
+```
+
+```bash curl
+curl -X DELETE https://your-api-host/api/productos/12 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`**
+
+```
+Producto eliminado
+```
+
+---
+
+## Data models
+
+### ProductoRequestDTO
+
+| Field         | Type          | Required | Constraints                  |
+|---------------|---------------|----------|------------------------------|
+| `nombre`      | `string`      | ✅       | Not blank; max 55 characters |
+| `categoria`   | `Categoria`   | ✅       | Must be a valid enum value   |
+| `unidadMedida`| `UnidadMedida`| ✅       | Must be a valid enum value   |
+
+### ProductoResponseDTO
+
+<ResponseField name="id" type="Long">
+  Internal numeric identifier assigned by the system.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Display name of the product.
+</ResponseField>
+
+<ResponseField name="categoria" type="Categoria">
+  Food category of the product.
+</ResponseField>
+
+<ResponseField name="unidadMedida" type="UnidadMedida">
+  Unit of measure used for this product.
+</ResponseField>
+
+---
+
+## Enum: Categoria
+
+| Value                   | Description                                  |
+|-------------------------|----------------------------------------------|
+| `CEREALES_Y_DERIVADOS`  | Cereals and grain-derived products           |
+| `LEGUMBRES`             | Legumes (lentils, chickpeas, beans, etc.)    |
+| `CONSERVAS`             | Canned and preserved foods                   |
+| `LACTEOS`               | Dairy products                               |
+| `CARNES_Y_PROTEINAS`    | Meat and other protein sources               |
+| `FRUTAS_Y_VERDURAS`     | Fruits and vegetables                        |
+| `ACEITES_Y_GRASAS`      | Oils and fats                                |
+| `AZUCARES_Y_DULCES`     | Sugars and sweets                            |
+| `INFUSIONES_Y_BEBIDAS`  | Infusions and beverages                      |
+| `CONDIMENTOS_Y_SALSAS`  | Condiments and sauces                        |
+| `PANIFICADOS`           | Bakery and bread products                    |
+| `ALIMENTOS_INFANTILES`  | Infant and toddler foods                     |
+| `ALIMENTOS_ESPECIALES`  | Special dietary foods                        |
+| `PRODUCTOS_DE_HIGIENE`  | Hygiene products                             |
+| `PRODUCTOS_DE_LIMPIEZA` | Cleaning products                            |
+| `OTROS`                 | Other / uncategorized items                  |
+
+---
+
+## Enum: UnidadMedida
+
+| Value       | Description    |
+|-------------|----------------|
+| `UNIDAD`    | Individual unit |
+| `KILOGRAMO` | Kilogram        |
+| `GRAMO`     | Gram            |
+| `LITRO`     | Litre           |
+| `MILILITRO` | Millilitre      |
+| `PAQUETE`   | Package         |
+| `CAJA`      | Box             |
+| `BOLSA`     | Bag             |
+| `LATA`      | Can / tin       |
+| `BOTELLA`   | Bottle          |

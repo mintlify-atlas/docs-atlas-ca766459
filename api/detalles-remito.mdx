@@ -1,0 +1,331 @@
+---
+title: "Remito Details API — manage dispatch note line items"
+sidebarTitle: "Detalles Remito"
+description: "Manage the individual line items within each dispatch note. Supports bulk creation, lookup by remito or donation item, full update, and deletion."
+---
+
+The Remito Details API manages the individual line items (detalles) that make up a dispatch note (remito). Each detail links a remito to a specific donation item (`idItemDonacion`) and records the quantity dispatched. Line items are identified by a UUID (`externalId`) and can be created in bulk by supplying a JSON array in a single POST request.
+
+## Base URL
+
+```
+/api/detalles-remito
+```
+
+<Note>
+  Path parameters use **UUID** format for the `externalId` of a detail, but the `idRemito` and `idItemDonacion` query/path parameters remain Long integers.
+</Note>
+
+---
+
+## Endpoints
+
+### List all remito details (paginated)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_VER` authority.
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Zero-based page index. Default: `0`.
+</ParamField>
+
+<ParamField query="size" type="integer">
+  Number of records per page. Default: `10`.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Sort field and direction (e.g. `idRemito,asc`).
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/detalles-remito
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/detalles-remito?page=0&size=10' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — Spring `Page<DetalleRemitoResponse>` envelope.
+
+```json
+{
+  "content": [
+    {
+      "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "idRemito": 3,
+      "idItemDonacion": 18,
+      "cantidad": 50
+    }
+  ],
+  "pageable": { "pageNumber": 0, "pageSize": 10 },
+  "totalElements": 120,
+  "totalPages": 12
+}
+```
+
+---
+
+### Get details by remito ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_VER` authority.
+</ParamField>
+
+<ParamField path="idRemito" type="Long" required>
+  Internal numeric ID of the remito whose details to retrieve.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/detalles-remito/remito/{idRemito}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/detalles-remito/remito/3 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+Returns all line items belonging to the specified remito as an array (not paginated).
+
+**Response — `200 OK`**
+
+```json
+[
+  {
+    "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "idRemito": 3,
+    "idItemDonacion": 18,
+    "cantidad": 50
+  },
+  {
+    "externalId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "idRemito": 3,
+    "idItemDonacion": 22,
+    "cantidad": 30
+  }
+]
+```
+
+---
+
+### Get details by donation item ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_VER` authority.
+</ParamField>
+
+<ParamField path="idItemDonacion" type="Long" required>
+  Internal numeric ID of the donation item to look up across all remitos.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/detalles-remito/item-donacion/{idItemDonacion}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/detalles-remito/item-donacion/18 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — JSON array of `DetalleRemitoResponse` objects.
+
+---
+
+### Bulk create remito details
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_CREAR` authority.
+</ParamField>
+
+<Note>
+  This endpoint accepts a **JSON array** of `NuevoDetalleRemito` objects, not a single object. All items in the array are persisted atomically in one request.
+</Note>
+
+<CodeGroup>
+```http
+POST /api/detalles-remito
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/detalles-remito \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '[
+    {
+      "idRemito": 3,
+      "idItemDonacion": 18,
+      "cantidad": 50
+    },
+    {
+      "idRemito": 3,
+      "idItemDonacion": 22,
+      "cantidad": 30
+    }
+  ]'
+```
+</CodeGroup>
+
+**Request body — `List<NuevoDetalleRemito>`**
+
+Each element in the array must contain:
+
+<ParamField body="idRemito" type="Long" required>
+  Internal numeric ID of the parent remito.
+</ParamField>
+
+<ParamField body="idItemDonacion" type="Long" required>
+  Internal numeric ID of the donation item being dispatched.
+</ParamField>
+
+<ParamField body="cantidad" type="integer" required>
+  Quantity dispatched. Must be at least `1`.
+</ParamField>
+
+**Response codes**
+
+| Code | Meaning                                      |
+|------|----------------------------------------------|
+| `201 Created`              | All details created successfully |
+| `400 Bad Request`          | Invalid request data             |
+| `404 Not Found`            | Remito or donation item not found|
+| `422 Unprocessable Entity` | Business rule violation          |
+
+**Response — `201 Created`** — JSON array of the created `DetalleRemitoResponse` objects.
+
+```json
+[
+  {
+    "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "idRemito": 3,
+    "idItemDonacion": 18,
+    "cantidad": 50
+  },
+  {
+    "externalId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+    "idRemito": 3,
+    "idItemDonacion": 22,
+    "cantidad": 30
+  }
+]
+```
+
+---
+
+### Update remito detail
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the detail to update.
+</ParamField>
+
+<CodeGroup>
+```http
+PUT /api/detalles-remito/{externalId}
+```
+
+```bash curl
+curl -X PUT https://your-api-host/api/detalles-remito/a1b2c3d4-e5f6-7890-abcd-ef1234567890 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "externalId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "idRemito": 3,
+    "idItemDonacion": 18,
+    "cantidad": 75
+  }'
+```
+</CodeGroup>
+
+**Request body — `DetalleRemitoRequest`**
+
+<ParamField body="externalId" type="UUID" required>
+  Must match the path parameter UUID.
+</ParamField>
+
+<ParamField body="idRemito" type="Long" required>
+  Internal numeric ID of the parent remito.
+</ParamField>
+
+<ParamField body="idItemDonacion" type="Long" required>
+  Internal numeric ID of the donation item.
+</ParamField>
+
+<ParamField body="cantidad" type="integer" required>
+  Updated quantity. Must be at least `1`.
+</ParamField>
+
+**Response — `200 OK`** — returns the updated `DetalleRemitoResponse`.
+
+---
+
+### Delete remito detail
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `DETALLE_REMITO_ELIMINAR` authority.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the detail to delete.
+</ParamField>
+
+<CodeGroup>
+```http
+DELETE /api/detalles-remito/{externalId}
+```
+
+```bash curl
+curl -X DELETE https://your-api-host/api/detalles-remito/a1b2c3d4-e5f6-7890-abcd-ef1234567890 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `204 No Content`** — empty body on success.
+
+---
+
+## Data models
+
+### NuevoDetalleRemito
+
+| Field            | Type      | Required | Constraints              |
+|------------------|-----------|----------|--------------------------|
+| `idRemito`       | `Long`    | ✅       | Must not be null         |
+| `idItemDonacion` | `Long`    | ✅       | Must not be null         |
+| `cantidad`       | `integer` | ✅       | Must be at least `1`     |
+
+### DetalleRemitoRequest
+
+| Field            | Type      | Required | Constraints                      |
+|------------------|-----------|----------|----------------------------------|
+| `externalId`     | `UUID`    | ✅       | Must match the path parameter    |
+| `idRemito`       | `Long`    | ✅       | Must not be null                 |
+| `idItemDonacion` | `Long`    | ✅       | Must not be null                 |
+| `cantidad`       | `integer` | ✅       | Must be at least `1`             |
+
+### DetalleRemitoResponse
+
+<ResponseField name="externalId" type="UUID">
+  Unique identifier of the remito detail.
+</ResponseField>
+
+<ResponseField name="idRemito" type="Long">
+  Internal ID of the parent remito.
+</ResponseField>
+
+<ResponseField name="idItemDonacion" type="Long">
+  Internal ID of the dispatched donation item.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Quantity of the donation item dispatched.
+</ResponseField>

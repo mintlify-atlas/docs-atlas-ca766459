@@ -1,47 +1,127 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get started with Banco Alimentos in 5 minutes"
+sidebarTitle: "Quickstart"
+description: "Clone the repo, start the stack with Docker Compose, obtain a JWT token, and make your first authenticated request to the Banco Alimentos API."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide takes you from zero to a working API session. The fastest path uses Docker and Docker Compose, which handle the MySQL database and the Spring Boot application together. If you prefer to run the application directly on your machine, a local Maven option is also covered in the [Deployment](/deployment) page.
 
 ## Prerequisites
 
-Before you begin, you must have:
+<CardGroup cols={2}>
+  <Card title="Docker path" icon="docker">
+    - [Docker](https://docs.docker.com/get-docker/) 24+
+    - [Docker Compose](https://docs.docker.com/compose/) v2+
+  </Card>
+  <Card title="Local path" icon="java">
+    - JDK 21+
+    - Maven 3.9+ (or use the included `mvnw` wrapper)
+    - MySQL 8 running locally
+  </Card>
+</CardGroup>
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+## Steps
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Clone the repository">
+    Download the source code from GitHub.
 
     ```bash
-    npm install your-package
+    git clone https://github.com/alvarezlautaro/BancoAlimentos.git
+    cd BancoAlimentos
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
+  <Step title="Create an environment file">
+    The `docker-compose.yml` reads all sensitive values from environment variables. Create a `.env` file in the project root to supply them:
+
+    ```bash title=".env"
+    MYSQL_ROOT_PASSWORD=rootpassword
+    MYSQL_DATABASE=Banco_Alimentos
+    DB_USER=bancouser
+    DB_PASSWORD=bancopassword
+    JWT_SECRET=5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
+    JWT_EXPIRATION=86400000
     ```
+
+    <Warning>
+      Replace `JWT_SECRET` with a strong, randomly generated value before deploying to any shared or production environment. The value above is the application default and is publicly known.
+    </Warning>
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Start the stack with Docker Compose">
+    Build the application image and bring up both services (MySQL and the Spring Boot app). The `app` service waits for MySQL's health check to pass before starting.
 
     ```bash
-    your-cli start
+    docker compose up --build
     ```
+
+    Watch for the Spring Boot startup banner in the logs. The API is ready when you see output similar to:
+
+    ```
+    Started BancoAlimentosApplication in X.XXX seconds
+    ```
+
+    The application listens on **port 8080**.
+
+    <Note>
+      On the first start, `DataInitializer` runs and seeds the database with all roles, permissions, and the three default user accounts. Because `ddl-auto` is set to `create-drop`, the schema and seed data are recreated on every restart.
+    </Note>
+  </Step>
+
+  <Step title="Log in and obtain a JWT token">
+    Use the `POST /api/auth/login` endpoint with one of the three seeded credentials. The `deposito` user has the broadest permissions and is a good starting point.
+
+    | Username | Password | Role |
+    |---|---|---|
+    | `deposito` | `deposito123` | `USER_DEPOSITO` |
+    | `tesoreria` | `tesoreria123` | `USER_TESORERIA` |
+    | `institucional` | `institucional123` | `USER_INSTITUCIONAL` |
+
+    ```bash title="Log in as deposito"
+    curl -s -X POST http://localhost:8080/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"username": "deposito", "password": "deposito123"}'
+    ```
+
+    A successful response returns a JSON object containing your bearer token:
+
+    ```json title="Login response"
+    {
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZXBvc2l0byIsImlhdCI6..."
+    }
+    ```
+
+    Copy the value of `token` — you will send it as a `Bearer` header on every subsequent request.
+  </Step>
+
+  <Step title="Make your first authenticated request">
+    Fetch the list of donors with the token you just received. Replace `<YOUR_TOKEN>` with the actual value from the login response.
+
+    ```bash title="List all donors"
+    curl -s http://localhost:8080/api/donantes \
+      -H "Authorization: Bearer <YOUR_TOKEN>"
+    ```
+
+    On a fresh install `DataInitializer` does not seed any donor data, so you will receive an empty array. The important thing is the `200 OK` status — confirming that authentication and authorisation are working:
+
+    ```json title="GET /api/donantes response"
+    []
+    ```
+
+    <Tip>
+      Open the interactive Swagger UI at [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html) to browse and try all available endpoints without leaving your browser. Use the **Authorize** button to paste your token once and have it applied to every request automatically.
+    </Tip>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Next steps
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Authentication overview" icon="lock" href="/auth/overview">
+    Understand how JWT tokens are generated, what claims they carry, and how the security filter validates each request.
+  </Card>
+  <Card title="Deployment options" icon="server" href="/deployment">
+    Configure environment variables, switch to a persistent database schema, and run the application locally with Maven.
+  </Card>
+</CardGroup>

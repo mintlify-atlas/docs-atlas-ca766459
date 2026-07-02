@@ -1,0 +1,150 @@
+{
+  "projectType": "api-service",
+  "projectName": "Banco Alimentos",
+  "projectDescription": "A Spring Boot REST API for managing food bank donations, donors, products, institutions, invoices, and dispatch notes with JWT-based role and permission security.",
+  "theme": "luma",
+  "primaryColor": "#2E7D32",
+  "lightColor": "#A5D6A7",
+  "darkColor": "#1B5E20",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "deployment"
+            ]
+          },
+          {
+            "group": "Authentication & Security",
+            "pages": [
+              "auth/overview",
+              "auth/roles-permissions"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/data-model",
+              "concepts/donation-lifecycle",
+              "concepts/audit-history"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth"
+            ]
+          },
+          {
+            "group": "Donors & Donations",
+            "pages": [
+              "api/donantes",
+              "api/donaciones",
+              "api/item-donacion"
+            ]
+          },
+          {
+            "group": "Products & Inventory",
+            "pages": [
+              "api/productos"
+            ]
+          },
+          {
+            "group": "Institutions & Distribution",
+            "pages": [
+              "api/instituciones",
+              "api/remitos",
+              "api/detalles-remito"
+            ]
+          },
+          {
+            "group": "Billing",
+            "pages": [
+              "api/facturas"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Full donation lifecycle management (PENDIENTE → CONFIRMADA → CANCELADA)",
+    "Donor (Donante) management with CUIT validation and audit history",
+    "Product catalog with 16 food categories and multiple units of measure",
+    "Institution management with payment status tracking and pagination",
+    "Dispatch note (Remito) and line-item (DetalleRemito) management",
+    "Invoice (Factura) generation from confirmed donations",
+    "JWT-based authentication with role-based access control (DEPOSITO, TESORERIA, INSTITUCIONAL)",
+    "Granular permission system with 35+ individual authorities",
+    "Hibernate Envers auditing for donors and institutions",
+    "Dockerized deployment with MySQL backend"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/login",
+    "GET /api/donantes",
+    "GET /api/donantes/{id}",
+    "POST /api/donantes",
+    "PUT /api/donantes/{id}",
+    "DELETE /api/donantes/{id}",
+    "GET /api/donantes/{id}/historial",
+    "GET /api/donaciones",
+    "GET /api/donaciones/{id}",
+    "POST /api/donaciones",
+    "PUT /api/donaciones/{id}",
+    "DELETE /api/donaciones/{id}",
+    "PUT /api/donaciones/{id}/confirmar",
+    "GET /api/itemdonacion",
+    "GET /api/itemdonacion/{id}",
+    "GET /api/itemdonacion/producto/{productoId}",
+    "GET /api/itemdonacion/donacion/{donacionId}",
+    "GET /api/itemdonacion/categoria/{categoria}",
+    "PUT /api/itemdonacion/{id}",
+    "PATCH /api/itemdonacion/{id}",
+    "DELETE /api/itemdonacion/{id}",
+    "GET /api/productos",
+    "GET /api/productos/{id}",
+    "GET /api/productos/filtrar/categoria",
+    "POST /api/productos",
+    "PUT /api/productos/{id}",
+    "PATCH /api/productos/{id}",
+    "DELETE /api/productos/{id}",
+    "GET /api/instituciones",
+    "GET /api/instituciones/{externalId}",
+    "GET /api/instituciones/nombre/{nombre}",
+    "GET /api/instituciones/tipo/{tipo}",
+    "GET /api/instituciones/estado-pago/{estado}",
+    "POST /api/instituciones",
+    "PUT /api/instituciones/{externalId}",
+    "PATCH /api/instituciones/{externalId}",
+    "DELETE /api/instituciones/{externalId}",
+    "GET /api/instituciones/{externalId}/historial",
+    "GET /api/remitos",
+    "GET /api/remitos/{id}",
+    "POST /api/remitos",
+    "PUT /api/remitos/{id}",
+    "PATCH /api/remitos/{id}",
+    "DELETE /api/remitos/{id}",
+    "GET /api/detalles-remito",
+    "GET /api/detalles-remito/remito/{idRemito}",
+    "GET /api/detalles-remito/item-donacion/{idItemDonacion}",
+    "POST /api/detalles-remito",
+    "PUT /api/detalles-remito/{externalId}",
+    "DELETE /api/detalles-remito/{externalId}",
+    "GET /api/facturas",
+    "GET /api/facturas/{id}",
+    "POST /api/facturas",
+    "PUT /api/facturas/{id}",
+    "DELETE /api/facturas/{id}",
+    "POST /api/facturas/generar/{idDonacion}"
+  ]
+}

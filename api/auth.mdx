@@ -1,0 +1,70 @@
+---
+title: "Authentication API — POST /api/auth/login"
+sidebarTitle: "Auth"
+description: "Authenticate with a username and password to receive a signed JWT Bearer token required for every protected endpoint in the Banco Alimentos API."
+---
+
+The Authentication API is the entry point for every session in Banco Alimentos. Submit valid credentials and the server returns a signed JSON Web Token (JWT). Include that token in the `Authorization` header of every subsequent request. All other API endpoints validate this token and enforce permission-based access control, so no other endpoint is reachable without first completing this step.
+
+---
+
+## POST /api/auth/login
+
+Validates the supplied credentials against the user store. On success it returns a JWT; on failure it responds with `401 Unauthorized`.
+
+### Request body
+
+<ParamField body="username" type="string" required>
+  The account username registered in the system.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The account password. Transmitted over HTTPS only.
+</ParamField>
+
+### Response
+
+<ResponseField name="token" type="string">
+  A signed JWT Bearer token. Pass this value in the `Authorization: Bearer <token>` header on every subsequent API request. Tokens are scoped to the authenticated user's roles and authorities.
+</ResponseField>
+
+### Example request
+
+```bash
+curl -s -X POST https://api.example.com/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "username": "admin",
+    "password": "secret123"
+  }'
+```
+
+### Example response
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTcwMDAwMDAwMH0.abc123"
+}
+```
+
+---
+
+## Using the token
+
+Include the token as a Bearer credential in the `Authorization` header for every protected request:
+
+```bash
+curl -s https://api.example.com/api/donantes \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+```
+
+The server validates the token's signature and extracts the user's granted authorities (e.g. `EMPRESA_VER`, `DONACION_CREAR`). A missing or expired token returns `401 Unauthorized`; a valid token for an account that lacks the required authority returns `403 Forbidden`.
+
+---
+
+## Error responses
+
+| HTTP Status | Condition |
+|---|---|
+| `401 Unauthorized` | Credentials are incorrect or the account does not exist. |
+| `400 Bad Request` | Request body is missing or `username` / `password` fields are blank (`@NotBlank` validation failure). |

@@ -1,0 +1,151 @@
+---
+title: "Audit history for donors and institutions"
+sidebarTitle: "Audit History"
+description: "How Banco Alimentos uses Hibernate Envers to automatically track every change to Donante and Institucion records, and how to query that history."
+---
+
+Banco Alimentos uses [Hibernate Envers](https://hibernate.org/orm/envers/) to maintain a tamper-evident revision history for the entities most sensitive to change: donors (`Donante`) and beneficiary institutions (`Institucion`). Every time an audited field is modified, Envers records a new revision entry automatically — no application code is required to trigger it. This page explains which entities are audited, what is captured, and how to retrieve historical snapshots through the API.
+
+## Audited entities
+
+Two entities carry the `@Audited` annotation at the class level.
+
+<CardGroup cols={2}>
+  <Card title="Donante" icon="user">
+    All scalar fields (`razonSocial`, `cuit`, `telefono`, `email`, `direccion`) are audited. The `donaciones` list association is excluded via `@NotAudited`.
+  </Card>
+  <Card title="Institucion" icon="building">
+    All scalar fields (`nombre`, `tipo`, `direccion`, `telefono`, `email`, `estado`, `externalId`) are audited. The `remitos` list association is excluded via `@NotAudited`.
+  </Card>
+</CardGroup>
+
+### Why associations are excluded
+
+Both `Donante` and `Institucion` carry `@NotAudited` on their respective `@OneToMany` collection fields (`donaciones` and `remitos`). This is intentional: tracking every addition or removal of a child record in those collections would flood the revision table with low-value entries. Audit history is focused on changes to the entity's own identifying and contact data.
+
+```java
+// Donante.java — association excluded from audit
+@NotAudited
+@OneToMany(mappedBy = "donante")
+private List<Donacion> donaciones;
+
+// Institucion.java — association excluded from audit
+@NotAudited
+@OneToMany(mappedBy = "institucion", orphanRemoval = true)
+private List<Remito> remitos;
+```
+
+## How Envers works under the hood
+
+When Hibernate Envers is active, it creates shadow `_AUD` tables for every `@Audited` entity alongside the primary tables. For Banco Alimentos these are:
+
+| Primary table | Audit table |
+|---|---|
+| `donantes` | `donantes_AUD` |
+| `institucion` | `institucion_AUD` |
+
+A shared `REVINFO` table stores revision metadata (revision number and timestamp). Each row in an `_AUD` table corresponds to one revision of one entity, with a `REVTYPE` column indicating whether the row represents an insert (`0`), update (`1`), or delete (`2`).
+
+<Info>
+  Envers creates the `_AUD` tables and `REVINFO` table automatically on application startup when `spring.jpa.hibernate.ddl-auto` is set to `update` or `create`. No manual migration scripts are required for the audit infrastructure itself.
+</Info>
+
+## Retrieving audit history via the API
+
+### Donor history
+
+```http
+GET /api/donantes/{id}/historial
+```
+
+Returns a list of historical `Donante` snapshots ordered by revision. Each entry in the response represents the full state of the donor record at a particular revision — useful for tracking when a CUIT, contact number, or address was last changed.
+
+**Path parameter:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | `Long` | Numeric internal ID of the `Donante` |
+
+**Example response (abbreviated):**
+
+```json
+[
+  {
+    "id": 3,
+    "razonSocial": "Fundación Ejemplo",
+    "cuit": "30-87654321-0",
+    "telefono": "011-3333-4444",
+    "email": "info@fundacion.org",
+    "direccion": "Calle Falsa 123, Rosario"
+  },
+  {
+    "id": 3,
+    "razonSocial": "Fundación Ejemplo",
+    "cuit": "30-87654321-0",
+    "telefono": "011-9999-0000",
+    "email": "info@fundacion.org",
+    "direccion": "Calle Falsa 123, Rosario"
+  }
+]
+```
+
+Each object in the array is a snapshot at a distinct revision; the list grows each time an audited field on that `Donante` is modified.
+
+---
+
+### Institution history
+
+```http
+GET /api/instituciones/{externalId}/historial
+```
+
+Returns a list of historical `Institucion` snapshots. The endpoint uses the UUID `externalId` — not the internal numeric `id` — as the path parameter, consistent with how all other institution endpoints are addressed.
+
+**Path parameter:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `externalId` | `UUID` | Public UUID identifier of the `Institucion` |
+
+**Example response (abbreviated):**
+
+```json
+[
+  {
+    "externalId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "nombre": "Comedor Esperanza",
+    "tipo": "COMEDOR",
+    "direccion": "Av. San Martín 500, Córdoba",
+    "telefono": "0351-222-3333",
+    "email": "comedor@esperanza.org",
+    "estado": "AL_DIA"
+  },
+  {
+    "externalId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "nombre": "Comedor Esperanza",
+    "tipo": "COMEDOR",
+    "direccion": "Av. San Martín 500, Córdoba",
+    "telefono": "0351-222-3333",
+    "email": "comedor@esperanza.org",
+    "estado": "DEUDOR"
+  }
+]
+```
+
+In this example the second snapshot shows a change to `estado` from `AL_DIA` to `DEUDOR`, which Envers captured automatically when the record was updated.
+
+---
+
+## What triggers a new revision
+
+A new revision entry is written whenever a JPA transaction that modifies an audited entity is committed. Common triggers include:
+
+- Updating a donor's contact details (`PUT /api/donantes/{id}`)
+- Changing an institution's `estadoPago` or `tipoInstitucion` (`PUT /api/instituciones/{externalId}`)
+- Creating a new `Donante` or `Institucion` (`POST`)
+
+Deletes are also captured with `REVTYPE = 2`, so the history reflects the entity's last known state before removal.
+
+<Note>
+  The audit history endpoints require specific permissions. Accessing `GET /api/donantes/{id}/historial` requires the `AUDITORIA_DONACION_VER` permission, and `GET /api/instituciones/{externalId}/historial` requires `AUDITORIA_INSTITUCION_VER`. Requests without the appropriate authority will receive a `403 Forbidden` response.
+</Note>

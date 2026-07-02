@@ -1,0 +1,264 @@
+---
+title: "Donors API — manage food bank donor companies"
+sidebarTitle: "Donantes"
+description: "Create, read, update, and delete donor company records for the food bank, and retrieve full audit history for any donor — all protected by role-based authorities."
+---
+
+The Donantes API manages the companies and organisations that donate food to the bank. Each donor (_donante_) holds identifying and contact information: legal name (_razón social_), tax ID (_CUIT_), phone number, email, and address. Every endpoint requires a valid JWT in the `Authorization` header and enforces a specific Spring Security authority, so callers must have the appropriate role before the request is processed.
+
+**Base URL:** `/api/donantes`
+
+---
+
+## Endpoints
+
+### GET /api/donantes
+
+Returns the full list of registered donors.
+
+**Required authority:** `EMPRESA_VER`
+
+#### Response
+
+Returns an array of [DonanteResponseDTO](#donante-response-schema) objects.
+
+```bash
+curl -s https://api.example.com/api/donantes \
+  -H 'Authorization: Bearer <token>'
+```
+
+```json
+[
+  {
+    "razonSocial": "Alimentos del Sur S.A.",
+    "cuit": "30712345678",
+    "telefono": "01145678901",
+    "email": "contacto@alimentosdelsur.com",
+    "direccion": "Av. San Martín 1234, Buenos Aires"
+  }
+]
+```
+
+---
+
+### GET /api/donantes/\{id\}
+
+Returns a single donor by its numeric ID.
+
+**Required authority:** `EMPRESA_VER`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donor.
+</ParamField>
+
+#### Response
+
+Returns a single [DonanteResponseDTO](#donante-response-schema) object. Throws `404` if the donor is not found.
+
+```bash
+curl -s https://api.example.com/api/donantes/7 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### POST /api/donantes
+
+Creates a new donor record.
+
+**Required authority:** `EMPRESA_CREAR`
+
+#### Request body
+
+<ParamField body="razonSocial" type="string" required>
+  Legal business name of the donor company. Cannot be blank.
+</ParamField>
+
+<ParamField body="cuit" type="string" required>
+  Argentine tax identification number. Must be exactly 11 characters (digits only, no hyphens).
+</ParamField>
+
+<ParamField body="telefono" type="string" required>
+  Contact phone number. Must be between 10 and 11 characters.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Contact email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="direccion" type="string" required>
+  Physical address of the donor company. Cannot be blank.
+</ParamField>
+
+#### Response
+
+Returns the created [DonanteResponseDTO](#donante-response-schema) with HTTP `201 Created`.
+
+```bash
+curl -s -X POST https://api.example.com/api/donantes \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "razonSocial": "Alimentos del Sur S.A.",
+    "cuit": "30712345678",
+    "telefono": "01145678901",
+    "email": "contacto@alimentosdelsur.com",
+    "direccion": "Av. San Martín 1234, Buenos Aires"
+  }'
+```
+
+```json
+{
+  "razonSocial": "Alimentos del Sur S.A.",
+  "cuit": "30712345678",
+  "telefono": "01145678901",
+  "email": "contacto@alimentosdelsur.com",
+  "direccion": "Av. San Martín 1234, Buenos Aires"
+}
+```
+
+---
+
+### PUT /api/donantes/\{id\}
+
+Fully replaces an existing donor record. All fields must be provided.
+
+**Required authority:** `EMPRESA_ACTUALIZAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donor to update.
+</ParamField>
+
+#### Request body
+
+Same fields as [POST /api/donantes](#post-apidonantes) — all fields are required.
+
+#### Response
+
+Returns the updated [DonanteResponseDTO](#donante-response-schema) with HTTP `200 OK`.
+
+```bash
+curl -s -X PUT https://api.example.com/api/donantes/7 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "razonSocial": "Alimentos del Sur S.A.",
+    "cuit": "30712345678",
+    "telefono": "01145679999",
+    "email": "nuevo@alimentosdelsur.com",
+    "direccion": "Av. San Martín 1234, Buenos Aires"
+  }'
+```
+
+---
+
+### DELETE /api/donantes/\{id\}
+
+Permanently deletes a donor record by ID.
+
+**Required authority:** `EMPRESA_ELIMINAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donor to delete.
+</ParamField>
+
+#### Response
+
+Returns HTTP `200 OK` with the plain-text body `"Donante eliminado"`.
+
+```bash
+curl -s -X DELETE https://api.example.com/api/donantes/7 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### GET /api/donantes/\{id\}/historial
+
+Returns the full audit history for a given donor — all past versions of the record as stored by the auditing mechanism.
+
+**Required authority:** `AUDITORIA_DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donor whose history is requested.
+</ParamField>
+
+#### Response
+
+Returns an array of `Donante` entity snapshots representing the change history.
+
+```bash
+curl -s https://api.example.com/api/donantes/7/historial \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+## Schemas
+
+### Donante request schema
+
+Fields sent when creating or updating a donor.
+
+<ResponseField name="razonSocial" type="string">
+  Legal business name of the donor. Required; cannot be null.
+</ResponseField>
+
+<ResponseField name="cuit" type="string">
+  Tax ID (CUIT). Must be exactly 11 characters.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Contact phone number. Must be 10–11 characters.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Contact email address. Must be a valid email format.
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Physical address. Required; cannot be null.
+</ResponseField>
+
+### Donante response schema
+
+Fields returned in all donor read operations.
+
+<ResponseField name="razonSocial" type="string">
+  Legal business name of the donor.
+</ResponseField>
+
+<ResponseField name="cuit" type="string">
+  Tax ID (CUIT) of the donor.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Contact phone number.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Contact email address.
+</ResponseField>
+
+<ResponseField name="direccion" type="string">
+  Physical address.
+</ResponseField>
+
+---
+
+## Error responses
+
+| HTTP Status | Condition |
+|---|---|
+| `400 Bad Request` | Validation failure on request body fields (e.g. CUIT length, blank required fields). |
+| `401 Unauthorized` | Missing or invalid JWT. |
+| `403 Forbidden` | Valid JWT but the user lacks the required authority. |
+| `404 Not Found` | No donor found for the supplied `id`. |

@@ -1,0 +1,252 @@
+---
+title: "Banco Alimentos data model and entity relationships"
+sidebarTitle: "Data Model"
+description: "A complete reference for every entity, field, and enumeration in the Banco Alimentos food bank donation management API."
+---
+
+Banco Alimentos structures its domain around seven core entities that together cover the full journey of a food donation — from the moment a donor registers a contribution through product cataloguing, invoice generation, and final distribution to beneficiary institutions. Understanding how these entities relate to one another is the foundation for working with any part of the API.
+
+## Entity overview
+
+<CardGroup cols={2}>
+  <Card title="Donante" icon="user">
+    A legal donor (company or individual) identified by CUIT. Owns one or more donations.
+  </Card>
+  <Card title="Donacion" icon="box-open">
+    A single donation event submitted by a Donante. Carries a lifecycle state and zero or more line items.
+  </Card>
+  <Card title="ItemDonacion" icon="list">
+    A line item inside a Donacion. Links a specific Producto to the donation with quantity, unit value, and expiry information.
+  </Card>
+  <Card title="Producto" icon="tag">
+    A catalogued food or hygiene product, classified by category and unit of measure.
+  </Card>
+  <Card title="Institucion" icon="building">
+    A beneficiary institution (soup kitchen, school, etc.) that receives goods via Remito dispatch notes.
+  </Card>
+  <Card title="Remito" icon="file-alt">
+    A dispatch note that records an outbound transfer of goods to a single Institucion on a given date.
+  </Card>
+  <Card title="Factura" icon="receipt">
+    An invoice linked one-to-one with a Donacion. Created automatically on donation submission (type C) or explicitly via the generate endpoint (type A).
+  </Card>
+</CardGroup>
+
+## Entity reference
+
+### Donante
+
+Stored in the `donantes` table. Annotated with `@Audited` — every change to core fields is tracked by Hibernate Envers. The `donaciones` association is marked `@NotAudited` to keep revision history focused on donor data only.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated primary key |
+| `razonSocial` | `String` | No | Legal business name |
+| `cuit` | `String` | No | Argentine tax ID |
+| `telefono` | `String` | No | Contact phone number |
+| `email` | `String` | No | Contact email address |
+| `direccion` | `String` | No | Street address |
+| `donaciones` | `List<Donacion>` | — | Back-reference; `@NotAudited` |
+
+---
+
+### Donacion
+
+Stored in the `donaciones` table. Each Donacion belongs to exactly one Donante and contains one or more ItemDonacion line items. The `estado` field drives the donation lifecycle state machine.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated primary key (`id_donacion`) |
+| `fecha` | `LocalDate` | No | Date of the donation |
+| `estado` | `EstadoDonacion` | No | Lifecycle state — see enumerations below |
+| `nroRemitoProveedor` | `int` | — | Supplier-side remito reference number |
+| `observaciones` | `String` | Yes | Free-text notes |
+| `itemDonaciones` | `List<ItemDonacion>` | — | Line items; `CascadeType.ALL`, `orphanRemoval = true` |
+| `donante` | `Donante` (FK) | No | Owning donor (`id_donante`) |
+
+---
+
+### ItemDonacion
+
+Stored in the `ItemDonacion` table. Acts as the join entity between a Donacion and a Producto, enriched with quantity, monetary, and expiry data. ItemDonacion records are also referenced by DetalleRemito when goods are dispatched outbound.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated primary key (`id_itemdonacion`) |
+| `cantidad` | `Integer` | No | Quantity donated |
+| `valorUnitario` | `Double` | No | Unit value at donation time |
+| `fechaVencimiento` | `Date` | No | Product expiry date |
+| `producto` | `Producto` (FK) | No | Catalogued product reference (`producto_id`) |
+| `donacion` | `Donacion` (FK) | No | Owning donation (`id_donacion`) |
+
+---
+
+### Producto
+
+Stored in the `productos` table. Represents a product in the catalogue. The combination of `categoria` and `unidadMedida` enumerations standardises data entry across all donations.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated primary key (`id_producto`) |
+| `nombre` | `String` | No | Product name (max 55 characters) |
+| `categoria` | `Categoria` | No | Product category — see enumerations below |
+| `unidadMedida` | `UnidadMedida` | No | Unit of measure — see enumerations below |
+
+---
+
+### Institucion
+
+Stored in the `institucion` table. Annotated with `@Audited` — institutional profile changes are revision-tracked. An auto-generated UUID (`externalId`) is used as the stable public identifier for external API references; the internal numeric `id` is never exposed to callers.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated internal primary key (`id_institucion`) |
+| `externalId` | `UUID` | No | Public-facing identifier; set on `@PrePersist`, immutable (`updatable = false`) |
+| `nombre` | `String` | No | Institution name |
+| `tipo` | `tipoInstitucion` | No | Institution type — see enumerations below |
+| `direccion` | `String` | No | Street address |
+| `telefono` | `String` | No | Contact phone number |
+| `email` | `String` | No | Contact email address |
+| `estado` | `estadoPago` | No | Payment standing — see enumerations below |
+| `remitos` | `List<Remito>` | — | Dispatch notes issued to this institution; `@NotAudited` |
+
+---
+
+### Remito
+
+Stored in the `remito` table. Records a single outbound dispatch of goods to a beneficiary Institucion. Like Institucion, it carries a UUID `externalId` as its public identifier.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated internal primary key (`id_remito`) |
+| `externalId` | `UUID` | No | Public-facing identifier; set on `@PrePersist`, immutable |
+| `fecha` | `LocalDate` | Yes | Dispatch date |
+| `institucion` | `Institucion` (FK) | Yes | Receiving institution (`id_institucion`) |
+
+---
+
+### DetalleRemito
+
+Stored in the `detalle-remito` table. Each row links one Remito to one ItemDonacion, recording how many units of that donation line item are dispatched in that remito.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `idDetalleRemito` | `Long` | No | Auto-generated internal primary key |
+| `externalId` | `UUID` | No | Public-facing identifier; set on `@PrePersist`, immutable |
+| `remito` | `Remito` (FK) | Yes | Parent dispatch note (`id_remito`) |
+| `itemDonacion` | `ItemDonacion` (FK) | Yes | Donation line item being dispatched (`id_item_donacion`) |
+| `cantidad` | `Integer` | No | Quantity dispatched in this line |
+
+---
+
+### Factura
+
+Stored in the `facturas` table. A Factura has a strict one-to-one relationship with a Donacion enforced by a unique constraint on the `id_donacion` column. The invoice type reflects the fiscal category of the transaction.
+
+| Field | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | `Long` | No | Auto-generated primary key (`id_factura`) |
+| `donacion` | `Donacion` (FK) | No | Associated donation (`id_donacion`); unique |
+| `fecha` | `LocalDate` | No | Invoice date |
+| `tipo` | `TipoFactura` | No | Fiscal invoice type — see enumerations below |
+
+---
+
+## Enumerations
+
+### EstadoDonacion
+
+Controls the lifecycle state of a `Donacion`.
+
+| Value | Description |
+|---|---|
+| `PENDIENTE` | Initial state assigned at creation |
+| `CONFIRMADA` | Donation confirmed; invoices can be generated |
+| `CANCELADA` | Donation soft-cancelled |
+
+### Categoria
+
+Classifies a `Producto` into one of 16 food and household product categories.
+
+| Value |
+|---|
+| `CEREALES_Y_DERIVADOS` |
+| `LEGUMBRES` |
+| `CONSERVAS` |
+| `LACTEOS` |
+| `CARNES_Y_PROTEINAS` |
+| `FRUTAS_Y_VERDURAS` |
+| `ACEITES_Y_GRASAS` |
+| `AZUCARES_Y_DULCES` |
+| `INFUSIONES_Y_BEBIDAS` |
+| `CONDIMENTOS_Y_SALSAS` |
+| `PANIFICADOS` |
+| `ALIMENTOS_INFANTILES` |
+| `ALIMENTOS_ESPECIALES` |
+| `PRODUCTOS_DE_HIGIENE` |
+| `PRODUCTOS_DE_LIMPIEZA` |
+| `OTROS` |
+
+### UnidadMedida
+
+Defines the unit of measure for a `Producto`.
+
+| Value | Description |
+|---|---|
+| `UNIDAD` | Individual unit |
+| `KILOGRAMO` | Kilograms |
+| `GRAMO` | Grams |
+| `LITRO` | Litres |
+| `MILILITRO` | Millilitres |
+| `PAQUETE` | Package |
+| `CAJA` | Box |
+| `BOLSA` | Bag |
+| `LATA` | Can / tin |
+| `BOTELLA` | Bottle |
+
+### tipoInstitucion
+
+Categorises a beneficiary `Institucion`.
+
+| Value | Description |
+|---|---|
+| `COMEDOR` | Community dining hall |
+| `MERENDERO` | Community snack kitchen |
+| `ESCUELA` | School |
+| `OTRO` | Other institution type |
+
+### estadoPago
+
+Reflects the payment standing of an `Institucion`.
+
+| Value | Description |
+|---|---|
+| `AL_DIA` | Up to date |
+| `DEUDOR` | In arrears |
+| `EXCEPCIONAL` | Exceptional status |
+
+### TipoFactura
+
+The fiscal type of a `Factura`.
+
+| Value | Notes |
+|---|---|
+| `A` | Generated by the explicit `/api/facturas/generar/{idDonacion}` endpoint |
+| `B` | Manual invoice type |
+| `C` | Automatically assigned when a Donacion is first saved via `POST /api/donaciones` |
+
+---
+
+## Relationship diagram
+
+```
+Donante ──< Donacion ──< ItemDonacion >── Producto
+                │               │
+                │               └──< DetalleRemito >── Remito >── Institucion
+                │
+                └── Factura (1-to-1)
+```
+
+<Note>
+  `Institucion`, `Remito`, and `DetalleRemito` all expose a `externalId` (UUID) as their stable public identifier. `Donante` uses its numeric `id` directly. Never pass internal numeric IDs for entities that carry a UUID `externalId` — those endpoints accept the UUID form.
+</Note>

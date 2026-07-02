@@ -1,0 +1,298 @@
+---
+title: "Dispatch Notes API — manage food distribution remitos"
+sidebarTitle: "Remitos"
+description: "Create and manage dispatch notes (remitos) that record food deliveries to institutions. Supports date-range filtering and full pagination over delivery records."
+---
+
+The Remitos API manages dispatch notes — documents that record when and to which institution a food delivery was made. Each remito is identified by a UUID, links to an institution by its internal Long ID, and carries a delivery date. The list endpoint accepts flexible date filters so operations staff can query deliveries by month, year, or an arbitrary date range.
+
+## Base URL
+
+```
+/api/remitos
+```
+
+<Note>
+  Path parameters use **UUID** format (e.g. `3fa85f64-5717-4562-b3fc-2c963f66afa6`).
+</Note>
+
+---
+
+## Endpoints
+
+### Create remito
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_CREAR` authority.
+</ParamField>
+
+<CodeGroup>
+```http
+POST /api/remitos
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/remitos \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fecha": "2024-11-15",
+    "idInstitucion": 7
+  }'
+```
+</CodeGroup>
+
+**Request body — `NuevoRemitoDTO`**
+
+<ParamField body="fecha" type="LocalDate" required>
+  Delivery date in `YYYY-MM-DD` format. Must not be a future date.
+</ParamField>
+
+<ParamField body="idInstitucion" type="Long" required>
+  Internal numeric ID of the destination institution.
+</ParamField>
+
+**Response codes**
+
+| Code | Meaning                                      |
+|------|----------------------------------------------|
+| `201 Created`              | Remito created successfully    |
+| `400 Bad Request`          | Invalid request data           |
+| `404 Not Found`            | Institution not found          |
+| `422 Unprocessable Entity` | Business rule violation        |
+
+**Response — `201 Created`**
+
+```json
+{
+  "externalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "fecha": "2024-11-15",
+  "idInstitucion": 7
+}
+```
+
+---
+
+### List all remitos (paginated)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_VER` authority.
+</ParamField>
+
+<ParamField query="mes" type="integer">
+  Filter by month (1–12). Optional.
+</ParamField>
+
+<ParamField query="anio" type="integer">
+  Filter by year (e.g. `2024`). Optional.
+</ParamField>
+
+<ParamField query="desde" type="LocalDate">
+  Start of date range in `YYYY-MM-DD` format. Optional.
+</ParamField>
+
+<ParamField query="hasta" type="LocalDate">
+  End of date range in `YYYY-MM-DD` format. Optional.
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Zero-based page index. Default: `0`.
+</ParamField>
+
+<ParamField query="size" type="integer">
+  Number of records per page. Default: `10`.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Sort field and direction. Default: `fecha`.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/remitos
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/remitos?desde=2024-10-01&hasta=2024-10-31&page=0&size=10&sort=fecha,desc' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — Spring `Page<RemitoDTO>` envelope.
+
+```json
+{
+  "content": [
+    {
+      "externalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "fecha": "2024-10-20",
+      "idInstitucion": 7
+    }
+  ],
+  "pageable": { "pageNumber": 0, "pageSize": 10 },
+  "totalElements": 18,
+  "totalPages": 2
+}
+```
+
+---
+
+### Get remito by ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_VER` authority.
+</ParamField>
+
+<ParamField path="id" type="UUID" required>
+  External UUID of the remito.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/remitos/{id}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/remitos/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — single `RemitoDTO` object.
+
+---
+
+### Full update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="id" type="UUID" required>
+  External UUID of the remito to update.
+</ParamField>
+
+<CodeGroup>
+```http
+PUT /api/remitos/{id}
+```
+
+```bash curl
+curl -X PUT https://your-api-host/api/remitos/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fecha": "2024-11-20",
+    "idInstitucion": 9
+  }'
+```
+</CodeGroup>
+
+Request body uses `ActualizarRemitoDTO` fields (see [Data models](#data-models) below).
+
+**Response — `200 OK`** — returns the updated `RemitoDTO`.
+
+---
+
+### Partial update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="id" type="UUID" required>
+  External UUID of the remito.
+</ParamField>
+
+<CodeGroup>
+```http
+PATCH /api/remitos/{id}
+```
+
+```bash curl
+curl -X PATCH https://your-api-host/api/remitos/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "idInstitucion": 12
+  }'
+```
+</CodeGroup>
+
+Accepts the same `ActualizarRemitoDTO` shape; only provided fields are updated.
+
+**Response — `200 OK`** — returns the updated `RemitoDTO`.
+
+---
+
+### Delete remito
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `REMITO_ELIMINAR` authority.
+</ParamField>
+
+<ParamField path="id" type="UUID" required>
+  External UUID of the remito to delete.
+</ParamField>
+
+<CodeGroup>
+```http
+DELETE /api/remitos/{id}
+```
+
+```bash curl
+curl -X DELETE https://your-api-host/api/remitos/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `204 No Content`** — empty body on success.
+
+---
+
+## Data models
+
+### NuevoRemitoDTO
+
+<ParamField body="fecha" type="LocalDate" required>
+  Delivery date (`YYYY-MM-DD`). Must not be in the future.
+</ParamField>
+
+<ParamField body="idInstitucion" type="Long" required>
+  Internal numeric ID of the destination institution.
+</ParamField>
+
+### RemitoDTO
+
+<ResponseField name="externalId" type="UUID">
+  Unique identifier of the remito, assigned by the system.
+</ResponseField>
+
+<ResponseField name="fecha" type="LocalDate">
+  Delivery date in `YYYY-MM-DD` format.
+</ResponseField>
+
+<ResponseField name="idInstitucion" type="Long">
+  Internal numeric ID of the destination institution.
+</ResponseField>
+
+### ActualizarRemitoDTO
+
+| Field          | Type        | Required | Constraints                       |
+|----------------|-------------|----------|-----------------------------------|
+| `fecha`        | `LocalDate` |          | Must not be a future date         |
+| `idInstitucion`| `Long`      |          | Internal institution ID           |
+
+---
+
+## Pagination
+
+List responses use Spring's standard `Page<T>` envelope.
+
+| Query param | Default | Description                                    |
+|-------------|---------|------------------------------------------------|
+| `page`      | `0`     | Zero-based page number                         |
+| `size`      | `10`    | Records per page                               |
+| `sort`      | `fecha` | Sort field and optional direction (`asc`/`desc`)|
+
+Date filters (`mes`, `anio`, `desde`, `hasta`) can be combined freely. When both `mes`/`anio` and `desde`/`hasta` are supplied, the server's filtering logic applies.

@@ -1,0 +1,74 @@
+---
+title: "Banco Alimentos: Food Bank Donation Management API"
+sidebarTitle: "Introduction"
+description: "A Spring Boot REST API for managing food bank operations — donations, donors, products, institutions, dispatch notes, and invoices — secured with JWT."
+---
+
+Banco Alimentos is a Spring Boot REST API designed to digitise and streamline the day-to-day operations of a food bank. It provides structured endpoints for recording incoming donations, tracking donors and products, managing institutional beneficiaries, generating dispatch notes, and issuing invoices — all behind a role-based JWT security layer with a full Hibernate Envers audit trail.
+
+## Tech stack
+
+The application is built on a modern, production-ready Java stack:
+
+| Layer | Technology |
+|---|---|
+| Framework | Spring Boot 4.0.6 |
+| Language | Java 21 |
+| Database | MySQL 8 |
+| ORM | Spring Data JPA / Hibernate |
+| Authentication | Spring Security + JWT (JJWT 0.13) |
+| Auditing | Hibernate Envers 7.2 |
+| API docs | springdoc-openapi 3.0 (Swagger UI) |
+| Utilities | Lombok, ModelMapper 3.2 |
+
+## Core resources
+
+The API models the full lifecycle of a food-bank donation through six primary resources:
+
+- **Donacion** — individual donation records, each linked to a donor and one or more products
+- **Donante** — donors (individuals or companies) who contribute food items
+- **Producto** — the catalogue of product types accepted by the food bank
+- **Institucion** — beneficiary institutions that receive dispatched goods
+- **Remito / DetalleRemito** — dispatch notes and their line items, issued when goods leave the warehouse
+- **Factura** — invoices generated against donations for treasury tracking
+
+## User roles
+
+Access to every endpoint is governed by three distinct roles, each pre-seeded by `DataInitializer` on startup:
+
+| Role | Focus area | Key permissions |
+|---|---|---|
+| `USER_DEPOSITO` | Warehouse operations | Full CRUD on donations, products, donors, remitos, facturas; read-only on institutions; donation audit log |
+| `USER_TESORERIA` | Treasury | Read institutions; modify payment status |
+| `USER_INSTITUCIONAL` | Institutional management | Full CRUD on institutions; institution audit log |
+
+<Note>
+  All three user accounts are created automatically on every application start. See the [Quickstart](/quickstart) for credentials.
+</Note>
+
+## Interactive API docs
+
+Once the application is running, the full OpenAPI specification and a Swagger UI playground are available at:
+
+```
+http://localhost:8080/swagger-ui.html
+```
+
+No additional setup is required — springdoc-openapi auto-generates the spec from the controller annotations at startup.
+
+## Explore the docs
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the repo, spin up Docker Compose, and make your first authenticated API call in five minutes.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/auth/overview">
+    Learn how JWT tokens are issued, validated, and sent with every request.
+  </Card>
+  <Card title="Data Model" icon="database" href="/concepts/data-model">
+    Explore the entity relationships between donations, donors, products, and institutions.
+  </Card>
+  <Card title="Donation Lifecycle" icon="arrow-progress" href="/concepts/donation-lifecycle">
+    Follow a donation from creation through product assignment, dispatch, and invoicing.
+  </Card>
+</CardGroup>

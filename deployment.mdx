@@ -1,0 +1,170 @@
+---
+title: "Deploy Banco Alimentos with Docker or Maven"
+sidebarTitle: "Deployment"
+description: "Deploy the Banco Alimentos API using Docker Compose for a self-contained stack, or run it locally with Maven and an existing MySQL 8 instance."
+---
+
+Banco Alimentos ships with a multi-stage `Dockerfile` and a `docker-compose.yml` that wire up the Spring Boot application and a MySQL 8 database together. For local development you can also run the application directly with the Maven wrapper, pointing it at any MySQL instance you already have running.
+
+## Method 1 — Docker Compose (recommended)
+
+Docker Compose is the simplest way to get a fully working stack. A single command builds the application image and starts both the database and application services.
+
+### The compose file
+
+```yaml title="docker-compose.yml"
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: banco_alimentos_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - banco_alimentos_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  app:
+    build: .
+    container_name: banco_alimentos_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+    ports:
+      - "8080:8080"
+
+volumes:
+  banco_alimentos_data:
+```
+
+The `app` service will not start until MySQL passes its health check, so you do not need to worry about connection-refused errors during startup.
+
+### Providing environment variables
+
+All required values are read from the environment at runtime. The recommended approach is a `.env` file in the project root — Docker Compose picks it up automatically:
+
+```bash title=".env"
+MYSQL_ROOT_PASSWORD=a_strong_root_password
+MYSQL_DATABASE=Banco_Alimentos
+DB_USER=bancouser
+DB_PASSWORD=bancopassword
+JWT_SECRET=5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
+JWT_EXPIRATION=86400000
+```
+
+Then bring the stack up:
+
+```bash
+docker compose up --build
+```
+
+To run in the background add the `-d` flag:
+
+```bash
+docker compose up --build -d
+```
+
+Stop and remove containers (data volume is preserved):
+
+```bash
+docker compose down
+```
+
+---
+
+## Method 2 — Local Maven
+
+If you already have MySQL 8 running locally, you can start the application with the Spring Boot Maven plugin without touching Docker.
+
+### Prerequisites
+
+- JDK 21 or later (set `JAVA_HOME` accordingly)
+- Maven 3.9+ **or** use the included `./mvnw` wrapper (no separate Maven installation required)
+- A running MySQL 8 instance with a database named `Banco_Alimentos` (or the name of your choice, supplied via `DB_URL`)
+
+### Run the application
+
+Export environment variables in your shell, then start the application:
+
+```bash title="Run with Maven wrapper"
+export DB_URL=jdbc:mysql://localhost:3306/Banco_Alimentos
+export DB_USER=root
+export DB_PASSWORD=root
+export JWT_SECRET=5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
+export JWT_EXPIRATION=86400000
+
+./mvnw spring-boot:run
+```
+
+On Windows (PowerShell):
+
+```powershell title="Run on Windows"
+$env:DB_URL="jdbc:mysql://localhost:3306/Banco_Alimentos"
+$env:DB_USER="root"
+$env:DB_PASSWORD="root"
+$env:JWT_SECRET="5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f"
+$env:JWT_EXPIRATION="86400000"
+
+./mvnw spring-boot:run
+```
+
+The application will start on **port 8080** by default.
+
+---
+
+## Environment variable reference
+
+All configurable values are listed below. Every variable has a fallback default baked into `application.yaml`, so the application will start even if only some variables are supplied — but you should override at minimum the JWT secret in any non-local environment.
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_URL` | `jdbc:mysql://localhost:3306/Banco_Alimentos` | Full JDBC connection URL for the MySQL database. In Docker Compose the host is the service name `mysql`. |
+| `DB_USER` | `root` | MySQL user the application connects as. |
+| `DB_PASSWORD` | `root` | Password for `DB_USER`. |
+| `JWT_SECRET` | `5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f` | Hex string used to sign and verify JWT tokens. Must be kept secret. |
+| `JWT_EXPIRATION` | `86400000` | Token validity period in milliseconds. The default is 24 hours (86 400 000 ms). |
+
+<Warning>
+  Never use the default `JWT_SECRET` in a production or shared environment. Anyone who knows the secret can forge valid tokens for any username. Generate a strong random hex string (at least 64 characters) and supply it via a secrets manager or a protected `.env` file that is excluded from version control.
+</Warning>
+
+---
+
+## Schema management
+
+The application uses Hibernate's `ddl-auto: create-drop` strategy by default. This means:
+
+- The database schema is **created** on startup.
+- All data — including the seed users from `DataInitializer` — is **dropped** when the application shuts down.
+
+This is intentional for development: every start gives you a clean, predictable state.
+
+<Info>
+  For a persistent schema that survives restarts, change the `ddl-auto` value to `update` in `application.yaml` (or set it via a Spring property override). With `update`, Hibernate applies only the incremental DDL changes needed to match the current entity model and leaves existing data intact.
+</Info>
+
+```yaml title="application.yaml — switch to persistent schema"
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update   # was: create-drop
+```
+
+<Note>
+  When running with `create-drop` the `DataInitializer` re-seeds the three default user accounts (`deposito`, `tesoreria`, `institucional`) on every startup. When switching to `update`, run `DataInitializer` only once or add a guard to prevent it from duplicating records.
+</Note>

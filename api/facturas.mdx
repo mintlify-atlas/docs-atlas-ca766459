@@ -1,0 +1,279 @@
+---
+title: "Invoices API — manage and generate donation invoices"
+sidebarTitle: "Facturas"
+description: "Create invoices manually or auto-generate them from confirmed donations. Retrieve, update, and delete invoice records with fine-grained authority control."
+---
+
+The Facturas API manages tax invoices issued for food donations processed through the Banco Alimentos system. Invoices can be created manually by providing a donation reference, date, and invoice type, or generated automatically from a confirmed donation using the `/generar/{idDonacion}` endpoint. All IDs in this resource are Long integers. Access to each operation is controlled by dedicated authority strings.
+
+## Base URL
+
+```
+/api/facturas
+```
+
+---
+
+## Endpoints
+
+### List all invoices
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_VER` authority.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/facturas
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/facturas \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+Returns a JSON array of all invoices in the system.
+
+**Response — `200 OK`**
+
+```json
+[
+  {
+    "id": 1,
+    "idDonacion": 42,
+    "fecha": "2024-11-15",
+    "tipo": "B",
+    "nombreDonante": "Juan Pérez"
+  }
+]
+```
+
+---
+
+### Get invoice by ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_VER` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the invoice.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/facturas/{id}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/facturas/1 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — single `FacturaResponseDTO` object.
+
+---
+
+### Create invoice (manual)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_CREAR` authority.
+</ParamField>
+
+<CodeGroup>
+```http
+POST /api/facturas
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/facturas \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "idDonacion": 42,
+    "fecha": "2024-11-15",
+    "tipo": "B"
+  }'
+```
+</CodeGroup>
+
+**Request body — `FacturaRequestDTO`**
+
+<ParamField body="idDonacion" type="Long" required>
+  Internal numeric ID of the donation this invoice is issued against.
+</ParamField>
+
+<ParamField body="fecha" type="LocalDate" required>
+  Invoice date in `YYYY-MM-DD` format.
+</ParamField>
+
+<ParamField body="tipo" type="TipoFactura" required>
+  Invoice type. Must be one of the `TipoFactura` enum values: `A`, `B`, or `C`.
+</ParamField>
+
+**Response — `201 Created`**
+
+```json
+{
+  "id": 10,
+  "idDonacion": 42,
+  "fecha": "2024-11-15",
+  "tipo": "B",
+  "nombreDonante": "Juan Pérez"
+}
+```
+
+---
+
+### Update invoice
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_ACTUALIZAR` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the invoice to update.
+</ParamField>
+
+<CodeGroup>
+```http
+PUT /api/facturas/{id}
+```
+
+```bash curl
+curl -X PUT https://your-api-host/api/facturas/10 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "idDonacion": 42,
+    "fecha": "2024-11-20",
+    "tipo": "A"
+  }'
+```
+</CodeGroup>
+
+Request body uses the same `FacturaRequestDTO` fields as [Create invoice](#create-invoice-manual).
+
+**Response — `200 OK`** — returns the updated `FacturaResponseDTO`.
+
+---
+
+### Delete invoice
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_ELIMINAR` authority.
+</ParamField>
+
+<ParamField path="id" type="Long" required>
+  Internal numeric identifier of the invoice to delete.
+</ParamField>
+
+<CodeGroup>
+```http
+DELETE /api/facturas/{id}
+```
+
+```bash curl
+curl -X DELETE https://your-api-host/api/facturas/10 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`**
+
+```
+Factura eliminada correctamente
+```
+
+---
+
+### Auto-generate invoice from donation
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `FACTURA_CREAR` authority.
+</ParamField>
+
+<ParamField path="idDonacion" type="Long" required>
+  Internal numeric ID of the confirmed donation from which to generate the invoice.
+</ParamField>
+
+<Note>
+  The donation referenced by `idDonacion` must be in **`CONFIRMADA`** state. Calling this endpoint against a donation that has not been confirmed will result in a business-rule error (`422 Unprocessable Entity`).
+</Note>
+
+<CodeGroup>
+```http
+POST /api/facturas/generar/{idDonacion}
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/facturas/generar/42 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+No request body is required. The system derives all invoice data automatically from the confirmed donation record.
+
+**Response — `201 Created`**
+
+```json
+{
+  "id": 11,
+  "idDonacion": 42,
+  "fecha": "2024-11-15",
+  "tipo": "B",
+  "nombreDonante": "Juan Pérez"
+}
+```
+
+---
+
+## Data models
+
+### FacturaRequestDTO
+
+<ParamField body="idDonacion" type="Long" required>
+  ID of the donation this invoice is issued for. Must not be null.
+</ParamField>
+
+<ParamField body="fecha" type="LocalDate" required>
+  Invoice date in `YYYY-MM-DD` format. Must not be null.
+</ParamField>
+
+<ParamField body="tipo" type="TipoFactura" required>
+  Invoice type (`A`, `B`, or `C`). Must not be null.
+</ParamField>
+
+### FacturaResponseDTO
+
+<ResponseField name="id" type="Long">
+  Internal numeric identifier of the invoice, assigned by the system.
+</ResponseField>
+
+<ResponseField name="idDonacion" type="Long">
+  Internal numeric ID of the associated donation.
+</ResponseField>
+
+<ResponseField name="fecha" type="LocalDate">
+  Invoice date in `YYYY-MM-DD` format.
+</ResponseField>
+
+<ResponseField name="tipo" type="TipoFactura">
+  Invoice type: `A`, `B`, or `C`.
+</ResponseField>
+
+<ResponseField name="nombreDonante" type="string">
+  Full name of the donor, populated automatically from the donation record.
+</ResponseField>
+
+---
+
+## Enum: TipoFactura
+
+| Value | Description                                           |
+|-------|-------------------------------------------------------|
+| `A`   | Invoice type A — typically for VAT-registered entities |
+| `B`   | Invoice type B — typically for end consumers           |
+| `C`   | Invoice type C — for exempt entities                   |

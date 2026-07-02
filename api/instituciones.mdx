@@ -1,0 +1,449 @@
+---
+title: "Institutions API — manage food recipient organizations"
+sidebarTitle: "Instituciones"
+description: "Register and manage the institutions that receive food donations. Supports pagination, filtering by type or payment status, and a full audit history trail."
+---
+
+The Institutions API handles the lifecycle of organizations — such as soup kitchens, snack bars, and schools — that receive food donations through the Banco Alimentos network. Institution records are identified by a UUID (`externalId`) rather than a numeric ID, and all mutating endpoints require the `ROLE_USER_INSTITUCIONAL` role. Read access is available to the deposit, treasury, and institutional roles.
+
+## Base URL
+
+```
+/api/instituciones
+```
+
+<Note>
+  Path parameters and request-body IDs use **UUID** format (e.g. `3fa85f64-5717-4562-b3fc-2c963f66afa6`), not a plain numeric Long.
+</Note>
+
+---
+
+## Endpoints
+
+### List all institutions (paginated)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with one of: `ROLE_USER_DEPOSITO`, `ROLE_USER_TESORERIA`, or `ROLE_USER_INSTITUCIONAL`.
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Zero-based page index. Default: `0`.
+</ParamField>
+
+<ParamField query="size" type="integer">
+  Number of records per page. Default: `10`.
+</ParamField>
+
+<ParamField query="sort" type="string">
+  Field and direction, e.g. `nombre,asc`. Default: `nombre`.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/instituciones?page=0&size=10&sort=nombre,asc' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — Spring `Page<InstitucionDTO>` envelope.
+
+```json
+{
+  "content": [
+    {
+      "externalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "nombre": "Escuela Nuestra Señora de Fátima",
+      "tipo": "ESCUELA",
+      "telefono": "01112345678",
+      "email": "contacto@example.com",
+      "estado": "AL_DIA"
+    }
+  ],
+  "pageable": { "pageNumber": 0, "pageSize": 10 },
+  "totalElements": 42,
+  "totalPages": 5
+}
+```
+
+---
+
+### Get institution by ID
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with one of: `ROLE_USER_DEPOSITO`, `ROLE_USER_TESORERIA`, or `ROLE_USER_INSTITUCIONAL`.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the institution.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones/{externalId}
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/instituciones/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — single `InstitucionDTO` object.
+
+---
+
+### Get institution by name
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with one of: `ROLE_USER_DEPOSITO`, `ROLE_USER_TESORERIA`, or `ROLE_USER_INSTITUCIONAL`.
+</ParamField>
+
+<ParamField path="nombre" type="string" required>
+  Exact name of the institution.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones/nombre/{nombre}
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/instituciones/nombre/Comedor%20San%20Mart%C3%ADn' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — single `InstitucionDTO` object.
+
+---
+
+### Filter by institution type (paginated)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with one of: `ROLE_USER_DEPOSITO`, `ROLE_USER_TESORERIA`, or `ROLE_USER_INSTITUCIONAL`.
+</ParamField>
+
+<ParamField path="tipo" type="tipoInstitucion" required>
+  One of the `tipoInstitucion` enum values (see table below).
+</ParamField>
+
+<ParamField query="page" type="integer">Zero-based page index. Default: `0`.</ParamField>
+<ParamField query="size" type="integer">Page size. Default: `10`.</ParamField>
+<ParamField query="sort" type="string">Sort field and direction. Default: `nombre`.</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones/tipo/{tipo}
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/instituciones/tipo/COMEDOR?page=0&size=5' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — paginated `Page<InstitucionDTO>`.
+
+---
+
+### Filter by payment status (paginated)
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with one of: `ROLE_USER_DEPOSITO`, `ROLE_USER_TESORERIA`, or `ROLE_USER_INSTITUCIONAL`.
+</ParamField>
+
+<ParamField path="estado" type="estadoPago" required>
+  One of the `estadoPago` enum values (see table below).
+</ParamField>
+
+<ParamField query="page" type="integer">Zero-based page index. Default: `0`.</ParamField>
+<ParamField query="size" type="integer">Page size. Default: `10`.</ParamField>
+<ParamField query="sort" type="string">Sort field and direction. Default: `nombre`.</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones/estado-pago/{estado}
+```
+
+```bash curl
+curl -X GET 'https://your-api-host/api/instituciones/estado-pago/DEUDOR?size=20' \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `200 OK`** — paginated `Page<InstitucionDTO>`.
+
+---
+
+### Create institution
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `ROLE_USER_INSTITUCIONAL` role.
+</ParamField>
+
+<CodeGroup>
+```http
+POST /api/instituciones
+```
+
+```bash curl
+curl -X POST https://your-api-host/api/instituciones \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "nombre": "Comedor San Martín",
+    "tipo": "COMEDOR",
+    "direccion": "Av. San Martín 450",
+    "telefono": "01187654321",
+    "email": "comedor@example.com",
+    "estado": "AL_DIA"
+  }'
+```
+</CodeGroup>
+
+**Request body — `NuevaInstitucionDTO`**
+
+<ParamField body="nombre" type="string" required>
+  Institution name. At least 3 characters.
+</ParamField>
+
+<ParamField body="tipo" type="tipoInstitucion" required>
+  Institution type. Must be a valid `tipoInstitucion` enum value.
+</ParamField>
+
+<ParamField body="direccion" type="string" required>
+  Physical address of the institution.
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Contact phone number.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Contact email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="estado" type="estadoPago" required>
+  Current payment/subscription status. Must be a valid `estadoPago` enum value.
+</ParamField>
+
+**Response — `201 Created`** — returns the newly created `InstitucionDTO`.
+
+---
+
+### Full update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `ROLE_USER_INSTITUCIONAL` role.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the institution to update.
+</ParamField>
+
+<CodeGroup>
+```http
+PUT /api/instituciones/{externalId}
+```
+
+```bash curl
+curl -X PUT https://your-api-host/api/instituciones/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "externalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "nombre": "Comedor San Martín Actualizado",
+    "tipo": "COMEDOR",
+    "telefono": "01187654321",
+    "email": "nuevo@example.com",
+    "estado": "AL_DIA"
+  }'
+```
+</CodeGroup>
+
+Request body uses `InstitucionDTO` fields (see [Data models](#data-models) below).
+
+**Response — `200 OK`** — returns the updated `InstitucionDTO`.
+
+---
+
+### Partial update
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with `ROLE_USER_INSTITUCIONAL` or `ROLE_USER_TESORERIA`.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the institution to partially update.
+</ParamField>
+
+<CodeGroup>
+```http
+PATCH /api/instituciones/{externalId}
+```
+
+```bash curl
+curl -X PATCH https://your-api-host/api/instituciones/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "externalId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "estado": "DEUDOR"
+  }'
+```
+</CodeGroup>
+
+Request body uses `ActualizarInstitucionParcialDTO` (all fields optional except `externalId`). Only supplied fields are updated.
+
+**Response — `200 OK`** — returns the updated `InstitucionDTO`.
+
+---
+
+### Delete institution
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token with the `ROLE_USER_INSTITUCIONAL` role.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the institution to delete.
+</ParamField>
+
+<CodeGroup>
+```http
+DELETE /api/instituciones/{externalId}
+```
+
+```bash curl
+curl -X DELETE https://your-api-host/api/instituciones/3fa85f64-5717-4562-b3fc-2c963f66afa6 \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+**Response — `204 No Content`**
+
+---
+
+### Get audit history
+
+<ParamField header="Authorization" type="string" required>
+  Valid Bearer token.
+</ParamField>
+
+<ParamField path="externalId" type="UUID" required>
+  UUID of the institution whose history to retrieve.
+</ParamField>
+
+<CodeGroup>
+```http
+GET /api/instituciones/{externalId}/historial
+```
+
+```bash curl
+curl -X GET https://your-api-host/api/instituciones/3fa85f64-5717-4562-b3fc-2c963f66afa6/historial \
+  -H 'Authorization: Bearer <token>'
+```
+</CodeGroup>
+
+Returns a list of historical `Institucion` snapshots representing every revision stored for this institution.
+
+**Response — `200 OK`** — JSON array of institution snapshots.
+
+---
+
+## Data models
+
+### NuevaInstitucionDTO
+
+| Field       | Type             | Required | Constraints                      |
+|-------------|------------------|----------|----------------------------------|
+| `nombre`    | `string`         | ✅       | Not blank; min 3 characters      |
+| `tipo`      | `tipoInstitucion`| ✅       | Valid enum value                 |
+| `direccion` | `string`         | ✅       | Not blank                        |
+| `telefono`  | `string`         |          | Optional contact phone           |
+| `email`     | `string`         |          | Optional; must be a valid email  |
+| `estado`    | `estadoPago`     | ✅       | Valid enum value                 |
+
+### InstitucionDTO
+
+<ResponseField name="externalId" type="UUID">
+  Unique identifier of the institution.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  Institution name (min 3 characters).
+</ResponseField>
+
+<ResponseField name="tipo" type="tipoInstitucion">
+  Type of institution.
+</ResponseField>
+
+<ResponseField name="telefono" type="string">
+  Contact phone number (10–11 digits when provided).
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  Contact email address.
+</ResponseField>
+
+<ResponseField name="estado" type="estadoPago">
+  Current payment status of the institution's subscription.
+</ResponseField>
+
+### ActualizarInstitucionParcialDTO
+
+| Field       | Type             | Required | Constraints                      |
+|-------------|------------------|----------|----------------------------------|
+| `externalId`| `UUID`           | ✅       | Must match the path parameter    |
+| `nombre`    | `string`         |          | Min 3 characters if provided     |
+| `tipo`      | `tipoInstitucion`|          | Valid enum value if provided     |
+| `direccion` | `string`         |          | Optional                         |
+| `telefono`  | `string`         |          | 10–11 digits if provided         |
+| `email`     | `string`         |          | Valid email format if provided   |
+| `estado`    | `estadoPago`     |          | Valid enum value if provided     |
+
+---
+
+## Enum: tipoInstitucion
+
+| Value      | Description          |
+|------------|----------------------|
+| `COMEDOR`  | Community soup kitchen |
+| `MERENDERO`| Afternoon snack bar  |
+| `ESCUELA`  | School               |
+| `OTRO`     | Other organization   |
+
+---
+
+## Enum: estadoPago
+
+| Value        | Description                                    |
+|--------------|------------------------------------------------|
+| `AL_DIA`     | Subscription payments are current              |
+| `DEUDOR`     | Institution has outstanding dues               |
+| `EXCEPCIONAL`| Exceptional / waived payment arrangement       |
+
+---
+
+## Pagination
+
+All list endpoints use Spring's `Pageable` mechanism. The response is a standard Spring `Page<T>` envelope containing:
+
+| Field           | Description                                  |
+|-----------------|----------------------------------------------|
+| `content`       | Array of items for the current page          |
+| `pageable`      | Pagination metadata (`pageNumber`, `pageSize`)|
+| `totalElements` | Total number of matching records             |
+| `totalPages`    | Total number of pages                        |
+
+Query parameters:
+
+| Param  | Default  | Description                                   |
+|--------|----------|-----------------------------------------------|
+| `page` | `0`      | Zero-based page number                        |
+| `size` | `10`     | Number of items per page                      |
+| `sort` | `nombre` | Sort field and optional direction (`asc`/`desc`)|

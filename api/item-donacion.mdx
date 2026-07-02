@@ -1,0 +1,327 @@
+---
+title: "Donation Items API — manage line items within donations"
+sidebarTitle: "Items Donación"
+description: "Read, filter, update, and delete individual line items that belong to food donation records. Items are created as part of a Donacion and queried or managed here."
+---
+
+The Items Donación API provides read and management access to the individual line items (_ItemDonacion_) that make up a donation record. Each item captures a specific product, its quantity, unit value, and expiry date. Items are **created as part of a `Donacion`** through the Donations API (see [Donaciones](/api/donaciones)) — there is no dedicated POST endpoint here. Once created, items can be read, filtered by various criteria, fully or partially updated, and deleted through this API. All endpoints require a valid JWT and enforce the appropriate Spring Security authority.
+
+**Base URL:** `/api/itemdonacion`
+
+---
+
+## Endpoints
+
+### GET /api/itemdonacion
+
+Returns all donation line items across every donation record.
+
+**Required authority:** `ITEM_DONACION_VER`
+
+#### Response
+
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects.
+
+```bash
+curl -s https://api.example.com/api/itemdonacion \
+  -H 'Authorization: Bearer <token>'
+```
+
+```json
+[
+  {
+    "id": 44,
+    "fechaVencimiento": "2025-12-31T00:00:00.000+00:00",
+    "valorUnitario": 150.0,
+    "cantidad": 50,
+    "productoNombre": "Arroz",
+    "donante": "Alimentos del Sur S.A."
+  }
+]
+```
+
+---
+
+### GET /api/itemdonacion/\{id\}
+
+Returns a single donation item by its numeric ID.
+
+**Required authority:** `ITEM_DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation item.
+</ParamField>
+
+#### Response
+
+Returns a single [ItemDonacionResponseDTO](#item-donacion-response-schema) with HTTP `200 OK`.
+
+```bash
+curl -s https://api.example.com/api/itemdonacion/44 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### GET /api/itemdonacion/producto/\{productoId\}
+
+Returns all donation items associated with a specific product.
+
+**Required authority:** `ITEM_DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="productoId" type="Long" required>
+  The unique numeric identifier of the product to filter by.
+</ParamField>
+
+#### Response
+
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects whose product matches `productoId`.
+
+```bash
+curl -s https://api.example.com/api/itemdonacion/producto/3 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### GET /api/itemdonacion/donacion/\{donacionId\}
+
+Returns all items belonging to a specific donation record.
+
+**Required authority:** `ITEM_DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="donacionId" type="Long" required>
+  The unique numeric identifier of the parent donation.
+</ParamField>
+
+#### Response
+
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects for the given donation.
+
+```bash
+curl -s https://api.example.com/api/itemdonacion/donacion/12 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+### GET /api/itemdonacion/categoria/\{categoria\}
+
+Returns all donation items whose associated product belongs to the specified category.
+
+**Required authority:** `ITEM_DONACION_VER`
+
+#### Path parameters
+
+<ParamField path="categoria" type="string" required>
+  The product category name to filter by (e.g. `"Lácteos"`, `"Cereales"`).
+</ParamField>
+
+#### Response
+
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects matching the category.
+
+```bash
+curl -s 'https://api.example.com/api/itemdonacion/categoria/Cereales' \
+  -H 'Authorization: Bearer <token>'
+```
+
+```json
+[
+  {
+    "id": 44,
+    "fechaVencimiento": "2025-12-31T00:00:00.000+00:00",
+    "valorUnitario": 150.0,
+    "cantidad": 50,
+    "productoNombre": "Arroz",
+    "donante": "Alimentos del Sur S.A."
+  },
+  {
+    "id": 51,
+    "fechaVencimiento": "2026-03-15T00:00:00.000+00:00",
+    "valorUnitario": 95.0,
+    "cantidad": 120,
+    "productoNombre": "Fideos",
+    "donante": "Distribuidora Norte S.R.L."
+  }
+]
+```
+
+---
+
+### PUT /api/itemdonacion/\{id\}
+
+Fully replaces an existing donation item. All fields must be supplied.
+
+**Required authority:** `ITEM_DONACION_ACTUALIZAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation item to update.
+</ParamField>
+
+#### Request body
+
+<ParamField body="fechaVencimiento" type="date" required>
+  Product expiry date. Must be a future date.
+</ParamField>
+
+<ParamField body="valorUnitario" type="number">
+  Unit monetary value of the product. Must be a positive number.
+</ParamField>
+
+<ParamField body="cantidad" type="integer">
+  Quantity of units. Must be at least `1`.
+</ParamField>
+
+<ParamField body="productoId" type="Long" required>
+  ID of the associated product. Cannot be null.
+</ParamField>
+
+#### Response
+
+Returns the updated [ItemDonacionResponseDTO](#item-donacion-response-schema) with HTTP `200 OK`.
+
+```bash
+curl -s -X PUT https://api.example.com/api/itemdonacion/44 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "fechaVencimiento": "2026-01-01",
+    "valorUnitario": 160.00,
+    "cantidad": 75,
+    "productoId": 3
+  }'
+```
+
+---
+
+### PATCH /api/itemdonacion/\{id\}
+
+Partially updates an existing donation item. Accepts the same body structure as `PUT` but only the supplied fields are processed.
+
+**Required authority:** `ITEM_DONACION_ACTUALIZAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation item to patch.
+</ParamField>
+
+#### Request body
+
+Same fields as [PUT /api/itemdonacion/\{id\}](#put-apiitemdonacionid). Supply only the fields you want to change.
+
+#### Response
+
+Returns the updated [ItemDonacionResponseDTO](#item-donacion-response-schema) with HTTP `200 OK`.
+
+```bash
+curl -s -X PATCH https://api.example.com/api/itemdonacion/44 \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "cantidad": 80
+  }'
+```
+
+---
+
+### DELETE /api/itemdonacion/\{id\}
+
+Permanently deletes a donation item by its ID.
+
+**Required authority:** `ITEM_DONACION_ELIMINAR`
+
+#### Path parameters
+
+<ParamField path="id" type="Long" required>
+  The unique numeric identifier of the donation item to delete.
+</ParamField>
+
+#### Response
+
+Returns HTTP `200 OK` with the plain-text body `"ItemDonacion eliminado"`.
+
+```bash
+curl -s -X DELETE https://api.example.com/api/itemdonacion/44 \
+  -H 'Authorization: Bearer <token>'
+```
+
+---
+
+## Schemas
+
+### Item donacion request schema
+
+Fields used when updating a donation item (via `PUT` or `PATCH`).
+
+<ResponseField name="fechaVencimiento" type="date">
+  Product expiry date. Required; must be a future date.
+</ResponseField>
+
+<ResponseField name="valorUnitario" type="number">
+  Unit monetary value. Must be a positive number greater than zero.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Number of units. Must be at least `1`.
+</ResponseField>
+
+<ResponseField name="productoId" type="Long">
+  ID of the associated product entity. Required.
+</ResponseField>
+
+### Item donacion response schema
+
+Fields returned in all item read and update operations.
+
+<ResponseField name="id" type="Long">
+  Unique numeric identifier of the donation item.
+</ResponseField>
+
+<ResponseField name="fechaVencimiento" type="date">
+  Product expiry date (ISO 8601 timestamp).
+</ResponseField>
+
+<ResponseField name="valorUnitario" type="number">
+  Unit monetary value of the product.
+</ResponseField>
+
+<ResponseField name="cantidad" type="integer">
+  Number of units in this item line.
+</ResponseField>
+
+<ResponseField name="productoNombre" type="string">
+  Human-readable name of the associated product.
+</ResponseField>
+
+<ResponseField name="donante" type="string">
+  Legal name (_razón social_) of the donor company linked to the parent donation.
+</ResponseField>
+
+---
+
+## Creating items
+
+<Note>
+  Donation items are **not** created through this API directly. They are submitted as the `items` array when calling `POST /api/donaciones` or `PUT /api/donaciones/{id}`. See the [Donaciones API](/api/donaciones) for the creation workflow and the full `ItemDonacionRequestDTO` structure.
+</Note>
+
+---
+
+## Error responses
+
+| HTTP Status | Condition |
+|---|---|
+| `400 Bad Request` | Validation failure — e.g. past `fechaVencimiento`, non-positive `valorUnitario`, `cantidad` less than 1, or null `productoId`. |
+| `401 Unauthorized` | Missing or invalid JWT. |
+| `403 Forbidden` | Valid JWT but the user lacks the required authority. |
+| `404 Not Found` | No item found for the supplied `id`. |

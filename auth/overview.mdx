@@ -1,0 +1,127 @@
+---
+title: "Authenticate requests to Banco Alimentos API"
+sidebarTitle: "Overview"
+description: "Learn how JWT-based authentication works in Banco Alimentos: obtain a token via login, then include it as a Bearer token on every protected request."
+---
+
+The Banco Alimentos API uses **JSON Web Tokens (JWT)** to protect its endpoints. Every request — except the login endpoint itself — must carry a valid JWT in the `Authorization` header. The API is entirely stateless: no sessions are stored server-side. Each incoming request is verified independently by the `JwtAuthenticationFilter`, which intercepts the `Authorization` header, validates the token's signature and expiry, and loads the associated user's roles and permissions before the request reaches any controller.
+
+## How authentication works
+
+<Steps>
+  <Step title="Send your credentials to the login endpoint">
+    Make a `POST` request to `/api/auth/login` with a JSON body containing your `username` and `password`. This is the only public endpoint in the API — no token is required to call it.
+
+    ```bash
+    curl -X POST http://localhost:8080/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"username": "deposito", "password": "deposito123"}'
+    ```
+
+    A successful response returns a single `token` field:
+
+    ```json
+    {
+      "token": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZXBvc2l0byIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjoxNzAwMDg2NDAwfQ.eyJ..."
+    }
+    ```
+  </Step>
+
+  <Step title="Include the token in subsequent requests">
+    Attach the token as a `Bearer` value in the `Authorization` header on every protected request:
+
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    For example, to list all donations:
+
+    ```bash
+    curl http://localhost:8080/api/donaciones \
+      -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+    ```
+  </Step>
+
+  <Step title="Re-authenticate when the token expires">
+    Tokens are time-limited. Once a token expires, the API returns `403 Forbidden`. Call `/api/auth/login` again with valid credentials to obtain a fresh token.
+  </Step>
+</Steps>
+
+## Token configuration
+
+The JWT signing secret and lifetime are controlled by two environment variables read at startup. If neither variable is set, the application falls back to the defaults defined in `application.yaml`.
+
+<CardGroup cols={2}>
+  <Card title="JWT_SECRET" icon="key">
+    A Base64-encoded HMAC-SHA secret used to sign and verify every token. Override the default in production by setting this environment variable to a cryptographically strong value.
+
+    ```yaml
+    # application.yaml default
+    security:
+      jwt:
+        secret: ${JWT_SECRET:5a8d7f8b2c3e4f5a6b7...}
+    ```
+  </Card>
+  <Card title="JWT_EXPIRATION" icon="clock">
+    Token lifetime in **milliseconds**. The default is `86400000` — exactly 24 hours. Reduce this value in high-security environments.
+
+    ```yaml
+    # application.yaml default
+    security:
+      jwt:
+        expiration: ${JWT_EXPIRATION:86400000}
+    ```
+  </Card>
+</CardGroup>
+
+## Public vs. protected endpoints
+
+Only a small set of paths are accessible without a token. Everything else requires a valid, non-expired JWT.
+
+| Path pattern | Access |
+|---|---|
+| `POST /api/auth/login` | Public — no token required |
+| `GET /api/auth/**` | Public — no token required |
+| `/swagger-ui/**`, `/v3/api-docs/**` | Public — Swagger UI |
+| `/api/debug/**` | Public — debug utilities |
+| `/error` | Public — Spring error handler |
+| All other `/api/**` paths | **Requires authentication** |
+
+<Info>
+  Role-based restrictions apply on top of authentication. For example, `/api/donaciones/**` requires not only a valid token but also the `ROLE_USER_DEPOSITO` role. See [Roles & Permissions](/auth/roles-permissions) for the full breakdown.
+</Info>
+
+## How the JWT filter works
+
+On every incoming request the `JwtAuthenticationFilter` runs **before** Spring Security's standard username/password filter. It performs the following checks in order:
+
+1. Reads the `Authorization` header. If the header is absent or does not start with `Bearer `, the request passes through unauthenticated (and will be blocked later if the endpoint is protected).
+2. Extracts the raw token string (characters after `Bearer `).
+3. Parses the token to extract the `subject` claim (the username).
+4. Loads the `CredentialsEntity` for that username from the database.
+5. Calls `JwtService.isTokenValid()` — verifies the HMAC signature and checks that the expiry date has not passed.
+6. If valid, constructs a `UsernamePasswordAuthenticationToken` populated with the user's full authority set (roles **and** fine-grained permissions) and stores it in the `SecurityContextHolder`.
+
+Any exception during token parsing (malformed token, wrong secret, etc.) causes the security context to be cleared and the request to continue unauthenticated.
+
+<Warning>
+  Tokens do **not** refresh automatically. When a token expires your client will receive a `403 Forbidden` response. Your application must detect this condition and redirect the user to re-authenticate by calling `POST /api/auth/login` again. There is no refresh-token endpoint — a new full login is required.
+</Warning>
+
+## Quick reference
+
+```bash
+# 1. Log in and capture the token
+TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "deposito", "password": "deposito123"}' \
+  | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+# 2. Use the token in a protected request
+curl http://localhost:8080/api/donaciones \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+<Tip>
+  The `deposito`, `tesoreria`, and `institucional` seed users are created automatically on every application startup by `DataInitializer`. Use them during local development. See [Roles & Permissions](/auth/roles-permissions) to understand what each seed user can access.
+</Tip>
