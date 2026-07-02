@@ -1,5 +1,5 @@
 ---
-title: "Authenticate requests to Banco Alimentos API"
+title: "JWT authentication overview for the Banco Alimentos API"
 sidebarTitle: "Overview"
 description: "Learn how JWT-based authentication works in Banco Alimentos: obtain a token via login, then include it as a Bearer token on every protected request."
 ---
@@ -59,7 +59,7 @@ The JWT signing secret and lifetime are controlled by two environment variables 
     # application.yaml default
     security:
       jwt:
-        secret: ${JWT_SECRET:5a8d7f8b2c3e4f5a6b7...}
+        secret: ${JWT_SECRET:5a8d7f8b2c3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f}
     ```
   </Card>
   <Card title="JWT_EXPIRATION" icon="clock">
@@ -80,8 +80,7 @@ Only a small set of paths are accessible without a token. Everything else requir
 
 | Path pattern | Access |
 |---|---|
-| `POST /api/auth/login` | Public — no token required |
-| `GET /api/auth/**` | Public — no token required |
+| `/api/auth/**` | Public — no token required |
 | `/swagger-ui/**`, `/v3/api-docs/**` | Public — Swagger UI |
 | `/api/debug/**` | Public — debug utilities |
 | `/error` | Public — Spring error handler |

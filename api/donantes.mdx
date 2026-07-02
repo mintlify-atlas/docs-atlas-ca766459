@@ -1,7 +1,7 @@
 ---
-title: "Donors API — manage food bank donor companies"
+title: "Donantes API — manage Banco Alimentos donor companies"
 sidebarTitle: "Donantes"
-description: "Create, read, update, and delete donor company records for the food bank, and retrieve full audit history for any donor — all protected by role-based authorities."
+description: "Create, read, update, and delete donor records for the food bank, and retrieve full audit history for any donor — secured by role-based authorities."
 ---
 
 The Donantes API manages the companies and organisations that donate food to the bank. Each donor (_donante_) holds identifying and contact information: legal name (_razón social_), tax ID (_CUIT_), phone number, email, and address. Every endpoint requires a valid JWT in the `Authorization` header and enforces a specific Spring Security authority, so callers must have the appropriate role before the request is processed.
@@ -20,7 +20,7 @@ Returns the full list of registered donors.
 
 #### Response
 
-Returns an array of [DonanteResponseDTO](#donante-response-schema) objects.
+Returns an array of [DonanteResponseDTO](#donante-response-schema) objects with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/donantes \
@@ -55,7 +55,7 @@ Returns a single donor by its numeric ID.
 
 #### Response
 
-Returns a single [DonanteResponseDTO](#donante-response-schema) object. Throws `404` if the donor is not found.
+Returns a single [DonanteResponseDTO](#donante-response-schema) object with HTTP `200 OK`. Throws `404` if the donor is not found.
 
 ```bash
 curl -s https://api.example.com/api/donantes/7 \
@@ -73,7 +73,7 @@ Creates a new donor record.
 #### Request body
 
 <ParamField body="razonSocial" type="string" required>
-  Legal business name of the donor company. Cannot be blank.
+  Legal business name of the donor company. Cannot be null.
 </ParamField>
 
 <ParamField body="cuit" type="string" required>
@@ -89,7 +89,7 @@ Creates a new donor record.
 </ParamField>
 
 <ParamField body="direccion" type="string" required>
-  Physical address of the donor company. Cannot be blank.
+  Physical address of the donor company. Cannot be null.
 </ParamField>
 
 #### Response
@@ -193,7 +193,7 @@ Returns the full audit history for a given donor — all past versions of the re
 
 #### Response
 
-Returns an array of `Donante` entity snapshots representing the change history.
+Returns an array of `Donante` entity snapshots representing the change history with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/donantes/7/historial \
@@ -258,7 +258,7 @@ Fields returned in all donor read operations.
 
 | HTTP Status | Condition |
 |---|---|
-| `400 Bad Request` | Validation failure on request body fields (e.g. CUIT length, blank required fields). |
+| `400 Bad Request` | Validation failure on request body fields (e.g. CUIT length, null required fields). |
 | `401 Unauthorized` | Missing or invalid JWT. |
 | `403 Forbidden` | Valid JWT but the user lacks the required authority. |
 | `404 Not Found` | No donor found for the supplied `id`. |

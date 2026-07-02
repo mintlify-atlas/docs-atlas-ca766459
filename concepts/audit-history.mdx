@@ -147,5 +147,5 @@ A new revision entry is written whenever a JPA transaction that modifies an audi
 Deletes are also captured with `REVTYPE = 2`, so the history reflects the entity's last known state before removal.
 
 <Note>
-  The audit history endpoints require specific permissions. Accessing `GET /api/donantes/{id}/historial` requires the `AUDITORIA_DONACION_VER` permission, and `GET /api/instituciones/{externalId}/historial` requires `AUDITORIA_INSTITUCION_VER`. Requests without the appropriate authority will receive a `403 Forbidden` response.
+  `GET /api/donantes/{id}/historial` is protected by `@PreAuthorize("hasAuthority('AUDITORIA_DONACION_VER')")` — requests without that authority receive a `403 Forbidden` response. `GET /api/instituciones/{externalId}/historial` carries no method-level `@PreAuthorize` annotation and relies solely on any global security configuration in place.
 </Note>

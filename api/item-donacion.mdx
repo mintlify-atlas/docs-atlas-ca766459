@@ -1,10 +1,10 @@
 ---
 title: "Donation Items API — manage line items within donations"
 sidebarTitle: "Items Donación"
-description: "Read, filter, update, and delete individual line items that belong to food donation records. Items are created as part of a Donacion and queried or managed here."
+description: "Read, filter, update, and delete individual line items that belong to food donation records. Items are created as part of a Donacion and managed here."
 ---
 
-The Items Donación API provides read and management access to the individual line items (_ItemDonacion_) that make up a donation record. Each item captures a specific product, its quantity, unit value, and expiry date. Items are **created as part of a `Donacion`** through the Donations API (see [Donaciones](/api/donaciones)) — there is no dedicated POST endpoint here. Once created, items can be read, filtered by various criteria, fully or partially updated, and deleted through this API. All endpoints require a valid JWT and enforce the appropriate Spring Security authority.
+The Items Donación API provides read and management access to the individual line items (_ItemDonacion_) that make up a donation record. Each item captures a specific product, its quantity, unit value, and expiry date. Items are **created as part of a `Donacion`** through the Donations API (see [Donaciones](/api/donaciones)) — there is no dedicated POST endpoint here. Once created, items can be read, filtered by various criteria, updated, and deleted through this API. All endpoints require a valid JWT and enforce the appropriate Spring Security authority.
 
 **Base URL:** `/api/itemdonacion`
 
@@ -20,7 +20,7 @@ Returns all donation line items across every donation record.
 
 #### Response
 
-Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects.
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/itemdonacion \
@@ -79,7 +79,7 @@ Returns all donation items associated with a specific product.
 
 #### Response
 
-Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects whose product matches `productoId`.
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects whose product matches `productoId`, with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/itemdonacion/producto/3 \
@@ -102,7 +102,7 @@ Returns all items belonging to a specific donation record.
 
 #### Response
 
-Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects for the given donation.
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects for the given donation, with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/itemdonacion/donacion/12 \
@@ -125,7 +125,7 @@ Returns all donation items whose associated product belongs to the specified cat
 
 #### Response
 
-Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects matching the category.
+Returns an array of [ItemDonacionResponseDTO](#item-donacion-response-schema) objects matching the category, with HTTP `200 OK`.
 
 ```bash
 curl -s 'https://api.example.com/api/itemdonacion/categoria/Cereales' \
@@ -170,7 +170,7 @@ Fully replaces an existing donation item. All fields must be supplied.
 #### Request body
 
 <ParamField body="fechaVencimiento" type="date" required>
-  Product expiry date. Must be a future date.
+  Product expiry date. Must be a future date. Cannot be null.
 </ParamField>
 
 <ParamField body="valorUnitario" type="number">
@@ -205,19 +205,19 @@ curl -s -X PUT https://api.example.com/api/itemdonacion/44 \
 
 ### PATCH /api/itemdonacion/\{id\}
 
-Partially updates an existing donation item. Accepts the same body structure as `PUT` but only the supplied fields are processed.
+Updates an existing donation item. Accepts the same `ItemDonacionRequestDTO` body structure as `PUT`. The server applies the full DTO — supply all fields you want retained.
 
 **Required authority:** `ITEM_DONACION_ACTUALIZAR`
 
 #### Path parameters
 
 <ParamField path="id" type="Long" required>
-  The unique numeric identifier of the donation item to patch.
+  The unique numeric identifier of the donation item to update.
 </ParamField>
 
 #### Request body
 
-Same fields as [PUT /api/itemdonacion/\{id\}](#put-apiitemdonacionid). Supply only the fields you want to change.
+Same fields as [PUT /api/itemdonacion/\{id\}](#put-apiitemdonacionid). All validation rules apply.
 
 #### Response
 
@@ -228,7 +228,10 @@ curl -s -X PATCH https://api.example.com/api/itemdonacion/44 \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "cantidad": 80
+    "fechaVencimiento": "2026-01-01",
+    "valorUnitario": 160.00,
+    "cantidad": 80,
+    "productoId": 3
   }'
 ```
 
@@ -264,7 +267,7 @@ curl -s -X DELETE https://api.example.com/api/itemdonacion/44 \
 Fields used when updating a donation item (via `PUT` or `PATCH`).
 
 <ResponseField name="fechaVencimiento" type="date">
-  Product expiry date. Required; must be a future date.
+  Product expiry date. Required; must be a future date. Cannot be null.
 </ResponseField>
 
 <ResponseField name="valorUnitario" type="number">
@@ -276,7 +279,7 @@ Fields used when updating a donation item (via `PUT` or `PATCH`).
 </ResponseField>
 
 <ResponseField name="productoId" type="Long">
-  ID of the associated product entity. Required.
+  ID of the associated product entity. Required; cannot be null.
 </ResponseField>
 
 ### Item donacion response schema

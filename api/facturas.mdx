@@ -200,7 +200,7 @@ Factura eliminada correctamente
 </ParamField>
 
 <Note>
-  The donation referenced by `idDonacion` must be in **`CONFIRMADA`** state. Calling this endpoint against a donation that has not been confirmed will result in a business-rule error (`422 Unprocessable Entity`).
+  The donation referenced by `idDonacion` must not already have an associated invoice. If a factura already exists for that donation, the endpoint returns a business-rule error (`422 Unprocessable Entity`).
 </Note>
 
 <CodeGroup>
@@ -214,7 +214,7 @@ curl -X POST https://your-api-host/api/facturas/generar/42 \
 ```
 </CodeGroup>
 
-No request body is required. The system derives all invoice data automatically from the confirmed donation record.
+No request body is required. The system automatically sets the invoice date to today and the type to `A`.
 
 **Response — `201 Created`**
 
@@ -223,7 +223,7 @@ No request body is required. The system derives all invoice data automatically f
   "id": 11,
   "idDonacion": 42,
   "fecha": "2024-11-15",
-  "tipo": "B",
+  "tipo": "A",
   "nombreDonante": "Juan Pérez"
 }
 ```

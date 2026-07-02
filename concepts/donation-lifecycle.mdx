@@ -95,20 +95,6 @@ A `Donacion` is always in one of three states, stored in the `estado` field as a
     The response returns the updated `DonacionResponseDTO` with `estado: "CONFIRMADA"`. No request body is required.
   </Step>
 
-  <Step title="Generate a type-A invoice (optional)">
-    A type-C `Factura` was already created automatically at submission. If a type-A fiscal invoice is required, call the generate endpoint. This endpoint enforces uniqueness — it throws a `ReglaNegocioException` if a `Factura` already exists for that donation.
-
-    ```http
-    POST /api/facturas/generar/{idDonacion}
-    ```
-
-    The response is a `FacturaResponseDTO` containing `id`, `idDonacion`, `fecha` (today's date), and `tipo: "A"`.
-
-    <Warning>
-      Calling `POST /api/facturas/generar/{idDonacion}` when a Factura already exists for that donation returns an error. Each Donacion can have at most one Factura (enforced by a unique constraint on `id_donacion`).
-    </Warning>
-  </Step>
-
   <Step title="Create a remito for outbound distribution">
     When goods from the donation are to be distributed to a beneficiary institution, create a `Remito` referencing the target `Institucion` (identified by its UUID `externalId`).
 
@@ -158,7 +144,11 @@ Donacion
 
 ### Factura creation behaviour
 
-Two paths create a `Factura`:
+Two independent paths create a `Factura`, and each donation can have at most one (enforced by a unique constraint on `id_donacion`):
 
-1. **Automatic (type C):** `DonacionService.save()` always creates a `Factura` with `tipo = C` immediately after persisting the `Donacion`.
-2. **Explicit (type A):** `FacturaService.generarFactura()` creates a `Factura` with `tipo = A` on demand, but throws `ReglaNegocioException` if one already exists for the donation.
+1. **Automatic (type C):** `DonacionService.save()` always creates a `Factura` with `tipo = C` immediately after persisting the `Donacion`. This is the standard path for every new donation submitted via `POST /api/donaciones`.
+2. **Explicit (type A):** `FacturaService.generarFactura()` creates a `Factura` with `tipo = A` on demand via `POST /api/facturas/generar/{idDonacion}`. Because a type-C invoice is always created automatically on save, this endpoint will throw a `ReglaNegocioException` if called for a donation that was submitted through the normal flow. It is intended for cases where a donation was persisted without the automatic invoice creation (for example, via the direct `POST /api/facturas` endpoint with a different type).
+
+<Warning>
+  Each Donacion can have at most one Factura. Calling `POST /api/facturas/generar/{idDonacion}` when any Factura already exists for that donation returns a `ReglaNegocioException`. Because `POST /api/donaciones` always auto-creates a type-C Factura, the generate endpoint will fail for donations created through the standard submission flow.
+</Warning>

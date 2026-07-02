@@ -1,7 +1,7 @@
 ---
 title: "Donations API — manage donation records and lifecycle"
 sidebarTitle: "Donaciones"
-description: "Create and manage food donation records with line items, track lifecycle states from PENDIENTE through CONFIRMADA, and confirm donations before generating invoices."
+description: "Create and manage food donation records with line items, track states from PENDIENTE through CONFIRMADA, and confirm donations before generating invoices."
 ---
 
 The Donaciones API is the core of the Banco Alimentos workflow. A _donación_ represents a single donation event: a dated record linking a donor company to one or more item lines (_items_), carrying a supplier remittance number (_nroRemitoProveedor_), optional notes, and a lifecycle state. Donations begin in `PENDIENTE` state and must be explicitly confirmed via the `/confirmar` endpoint before downstream processes such as invoice generation can proceed. All endpoints require a valid JWT and enforce specific Spring Security authorities.
@@ -20,7 +20,7 @@ Returns the full list of donation records.
 
 #### Response
 
-Returns an array of [DonacionResponseDTO](#donacion-response-schema) objects.
+Returns an array of [DonacionResponseDTO](#donacion-response-schema) objects with HTTP `200 OK`.
 
 ```bash
 curl -s https://api.example.com/api/donaciones \
@@ -56,7 +56,7 @@ Returns a single donation by its numeric ID.
 
 #### Response
 
-Returns a single [DonacionResponseDTO](#donacion-response-schema). Throws a runtime exception (`404`) if the donation does not exist.
+Returns a single [DonacionResponseDTO](#donacion-response-schema) with HTTP `200 OK`. Throws a runtime exception (`404`) if the donation does not exist.
 
 ```bash
 curl -s https://api.example.com/api/donaciones/1 \
@@ -78,7 +78,7 @@ Creates a new donation record, including its initial set of line items.
 </ParamField>
 
 <ParamField body="estado" type="EstadoDonacion" required>
-  Initial lifecycle state. Must be one of `PENDIENTE`, `CONFIRMADA`, or `CANCELADA`. Typically set to `PENDIENTE` on creation.
+  Initial lifecycle state. Must be one of `PENDIENTE`, `CONFIRMADA`, or `CANCELADA`. Typically set to `PENDIENTE` on creation. Cannot be null.
 </ParamField>
 
 <ParamField body="nroRemitoProveedor" type="integer" required>
@@ -232,7 +232,7 @@ Transitions a donation's `estado` from `PENDIENTE` to `CONFIRMADA`. This action 
 
 #### Response
 
-Returns the updated [DonacionResponseDTO](#donacion-response-schema) with `estado` set to `CONFIRMADA`.
+Returns the updated [DonacionResponseDTO](#donacion-response-schema) with `estado` set to `CONFIRMADA` and HTTP `200 OK`.
 
 ```bash
 curl -s -X PUT https://api.example.com/api/donaciones/12/confirmar \
@@ -276,15 +276,15 @@ The `estado` field uses the following enumerated values:
 ### Donacion request schema
 
 <ResponseField name="fecha" type="string (LocalDate)">
-  Donation date in `YYYY-MM-DD` format. Required.
+  Donation date in `YYYY-MM-DD` format. Required; cannot be null.
 </ResponseField>
 
 <ResponseField name="estado" type="EstadoDonacion">
-  Lifecycle state. One of `PENDIENTE`, `CONFIRMADA`, `CANCELADA`. Required.
+  Lifecycle state. One of `PENDIENTE`, `CONFIRMADA`, `CANCELADA`. Required; cannot be null.
 </ResponseField>
 
 <ResponseField name="nroRemitoProveedor" type="integer">
-  Supplier remittance number. Required.
+  Supplier remittance number. Required; cannot be null.
 </ResponseField>
 
 <ResponseField name="observaciones" type="string">
@@ -331,7 +331,7 @@ The `estado` field uses the following enumerated values:
 
 | HTTP Status | Condition |
 |---|---|
-| `400 Bad Request` | Validation failure — e.g. null `fecha`, blank `items` array, invalid `estado` value. |
+| `400 Bad Request` | Validation failure — e.g. null `fecha`, empty `items` array, invalid `estado` value. |
 | `401 Unauthorized` | Missing or invalid JWT. |
 | `403 Forbidden` | Valid JWT but the user lacks the required authority. |
 | `404 Not Found` | No donation found for the supplied `id`. |

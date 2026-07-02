@@ -1,5 +1,5 @@
 ---
-title: "Authentication API — POST /api/auth/login"
+title: "Authentication API — obtain a JWT for Banco Alimentos"
 sidebarTitle: "Auth"
 description: "Authenticate with a username and password to receive a signed JWT Bearer token required for every protected endpoint in the Banco Alimentos API."
 ---
@@ -10,19 +10,21 @@ The Authentication API is the entry point for every session in Banco Alimentos. 
 
 ## POST /api/auth/login
 
-Validates the supplied credentials against the user store. On success it returns a JWT; on failure it responds with `401 Unauthorized`.
+Validates the supplied credentials against the user store. On success it returns `200 OK` with a JWT; on failure it responds with `401 Unauthorized`.
 
 ### Request body
 
 <ParamField body="username" type="string" required>
-  The account username registered in the system.
+  The account username registered in the system. Cannot be blank.
 </ParamField>
 
 <ParamField body="password" type="string" required>
-  The account password. Transmitted over HTTPS only.
+  The account password. Transmitted over HTTPS only. Cannot be blank.
 </ParamField>
 
 ### Response
+
+Returns HTTP `200 OK` with a JSON body containing a single field.
 
 <ResponseField name="token" type="string">
   A signed JWT Bearer token. Pass this value in the `Authorization: Bearer <token>` header on every subsequent API request. Tokens are scoped to the authenticated user's roles and authorities.
